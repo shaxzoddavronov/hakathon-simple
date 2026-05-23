@@ -17,6 +17,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, chat, schema, settings as settings_router, workspaces
 from app.config import settings
 from app.db.session import engine
+from app.engines import register_all as register_engines
+
+# Eagerly register concrete engine adapters so `get_engine(workspace)` works
+# from the first request — kept out of `app.engines.__init__` to avoid a
+# circular import with `services.readonly_validator`.
+register_engines()
 
 logger = logging.getLogger("querymind.main")
 
