@@ -111,3 +111,10 @@ def test_missing_path_raises() -> None:
     workspace = SimpleNamespace(dialect="sqlite", connection_meta={})
     with pytest.raises(ValueError, match="path"):
         SqliteEngine(workspace)
+
+
+@pytest.mark.asyncio
+async def test_probe_write_access_always_false(sales_db: Path) -> None:
+    # SQLite is opened mode=ro unconditionally, so it can never write.
+    engine = _engine(sales_db)
+    assert await engine.probe_write_access() is False

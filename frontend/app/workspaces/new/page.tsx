@@ -35,9 +35,46 @@ export default function NewWorkspacePage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [probing, setProbing] = useState(false);
+  const [probe, setProbe] = useState<{
+    reachable: boolean;
+    can_write: boolean;
+    message: string;
+  } | null>(null);
 
   if (typeof window !== "undefined" && !getToken()) {
     router.replace("/login");
+  }
+
+  function buildConn() {
+    const connection_meta =
+      dialect === "postgres"
+        ? { host, port: Number(port), db_name: dbName, ssl }
+        : { path };
+    const credentials = dialect === "postgres" ? { user, password } : {};
+    return { connection_meta, credentials };
+  }
+
+  async function testConnection() {
+    setProbe(null);
+    setError(null);
+    setProbing(true);
+    try {
+      const { connection_meta, credentials } = buildConn();
+      const result = await api<{
+        reachable: boolean;
+        can_write: boolean;
+        message: string;
+      }>("/workspaces/probe", {
+        method: "POST",
+        body: JSON.stringify({ dialect, connection_meta, credentials }),
+      });
+      setProbe(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Probe failed");
+    } finally {
+      setProbing(false);
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -45,12 +82,7 @@ export default function NewWorkspacePage() {
     setError(null);
     setBusy(true);
     try {
-      const connection_meta =
-        dialect === "postgres"
-          ? { host, port: Number(port), db_name: dbName, ssl }
-          : { path };
-      const credentials =
-        dialect === "postgres" ? { user, password } : {};
+      const { connection_meta, credentials } = buildConn();
       const auth_kind = dialect === "postgres" ? "password" : "none";
       await api("/workspaces", {
         method: "POST",
@@ -184,13 +216,39 @@ export default function NewWorkspacePage() {
           )}
 
           {error ? <div className="text-error text-sm">{error}</div> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-primary-container text-on-primary-container py-2 font-semibold disabled:opacity-50"
-          >
-            {busy ? "Creating…" : "Create workspace"}
-          </button>
+
+          {probe ? (
+            <div
+              className={
+                "rounded-xl px-4 py-3 text-sm border " +
+                (!probe.reachable
+                  ? "border-error/40 bg-error-container/20 text-error"
+                  : probe.can_write
+                    ? "border-error/40 bg-error-container/20 text-error"
+                    : "border-tertiary/40 bg-tertiary/10 text-tertiary")
+              }
+            >
+              {probe.message}
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={probing}
+              className="flex-1 rounded-xl border border-outline/30 text-on-surface py-2 font-semibold disabled:opacity-50 hover:bg-surface-container-high/40"
+            >
+              {probing ? "Testing…" : "Test connection"}
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="flex-1 rounded-xl bg-primary-container text-on-primary-container py-2 font-semibold disabled:opacity-50"
+            >
+              {busy ? "Creating…" : "Create workspace"}
+            </button>
+          </div>
         </GlassPanel>
 
         <GlassPanel className="px-5 py-4">

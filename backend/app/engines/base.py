@@ -96,4 +96,14 @@ class QueryEngine(Protocol):
         self, sql: str, *, row_cap: int = 1000, timeout_s: int = 10
     ) -> ResultSet: ...
 
+    async def probe_write_access(self) -> bool:
+        """Return True if the connection's credentials CAN write.
+
+        This is the read-only defense Layer 1 boundary check (PLAN.md):
+        attempt a harmless write (e.g. CREATE TEMP TABLE) and report
+        whether it succeeded. A True result means the user supplied
+        over-privileged credentials and should be warned.
+        """
+        ...
+
     async def aclose(self) -> None: ...

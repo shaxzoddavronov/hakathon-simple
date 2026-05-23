@@ -227,6 +227,23 @@ class PostgresEngine:
     def validate_readonly(self, sql: str) -> ValidationResult:
         return validate_readonly(sql, dialect="postgres")
 
+    async def probe_write_access(self) -> bool:
+        """Try CREATE TEMP TABLE and roll back. Success => creds can write."""
+        conn = await self._connect()
+        try:
+            tx = conn.transaction()
+            await tx.start()
+            try:
+                await conn.execute("CREATE TEMP TABLE _qm_probe (x int)")
+                can_write = True
+            except asyncpg.PostgresError:
+                can_write = False
+            finally:
+                await tx.rollback()
+            return can_write
+        finally:
+            await conn.close()
+
     async def execute(
         self, sql: str, *, row_cap: int = 1000, timeout_s: int = 10
     ) -> ResultSet:

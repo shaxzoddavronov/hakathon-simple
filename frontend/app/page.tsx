@@ -27,15 +27,28 @@ export default function WorkspacesPage() {
   const [items, setItems] = useState<WorkspaceOut[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function load() {
+    api<WorkspaceOut[]>("/workspaces")
+      .then(setItems)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+  }
+
   useEffect(() => {
     if (!getToken()) {
       router.replace("/login");
       return;
     }
-    api<WorkspaceOut[]>("/workspaces")
-      .then(setItems)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+    load();
   }, [router]);
+
+  async function reprofile(id: string) {
+    try {
+      await api(`/workspaces/${id}/refresh`, { method: "POST" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Re-profile failed");
+    }
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -109,6 +122,12 @@ export default function WorkspacesPage() {
                 <Link href="/chat" className="text-primary hover:underline">
                   Open chat
                 </Link>
+                <button
+                  onClick={() => reprofile(w.id)}
+                  className="text-on-surface-variant hover:text-primary"
+                >
+                  Re-profile
+                </button>
               </div>
             </GlassPanel>
           ))}

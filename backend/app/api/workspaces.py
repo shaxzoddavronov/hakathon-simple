@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any, Literal
 from uuid import UUID
 
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.models import ProfileJob, User, Workspace, WorkspaceCredentials
 from app.db.session import get_db
+from app.engines import register_all as register_engines
+from app.engines.registry import get_engine
 from app.services import crypto
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -34,6 +37,65 @@ class WorkspaceOut(BaseModel):
     dialect: str
     status: str
     profile_job_id: str | None = None
+
+
+class ProbeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dialect: Literal["postgres", "sqlite"]
+    connection_meta: dict[str, Any] = Field(default_factory=dict)
+    credentials: dict[str, str] = Field(default_factory=dict)
+
+
+class ProbeResult(BaseModel):
+    reachable: bool
+    can_write: bool
+    message: str
+
+
+@router.post("/probe", response_model=ProbeResult)
+async def probe_connection(
+    payload: ProbeRequest,
+    _user: User = Depends(get_current_user),
+) -> ProbeResult:
+    """Read-only defense Layer 1: test the connection and warn if the
+    supplied credentials have write access. Persists nothing."""
+    register_engines()
+    ws_like = SimpleNamespace(
+        dialect=payload.dialect,
+        connection_meta=payload.connection_meta,
+        _credentials=payload.credentials,
+    )
+    try:
+        engine = get_engine(ws_like)
+    except Exception as exc:
+        return ProbeResult(reachable=False, can_write=False, message=f"Bad config: {exc}")
+
+    try:
+        can_write = await engine.probe_write_access()
+    except Exception as exc:
+        return ProbeResult(
+            reachable=False,
+            can_write=False,
+            message=f"Could not connect: {exc}",
+        )
+    finally:
+        await engine.aclose()
+
+    if can_write:
+        return ProbeResult(
+            reachable=True,
+            can_write=True,
+            message=(
+                "Connected, but these credentials can WRITE to the database. "
+                "We strongly recommend a read-only role."
+            ),
+        )
+    return ProbeResult(
+        reachable=True,
+        can_write=False,
+        message="Connected. Credentials are read-only. ✓",
+    )
 
 
 @router.post(
@@ -123,6 +185,35 @@ async def get_workspace(
     if ws is None or ws.owner_id != current_user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
     return WorkspaceOut(id=str(ws.id), name=ws.name, dialect=ws.dialect, status=ws.status)
+
+
+@router.post("/{workspace_id}/refresh", response_model=WorkspaceOut)
+async def refresh_workspace(
+    workspace_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WorkspaceOut:
+    """Re-profile a workspace: enqueue a fresh ProfileJob and flip the
+    workspace back to 'profiling'."""
+    ws = await session.get(Workspace, workspace_id)
+    if ws is None or ws.owner_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+
+    ws.status = "profiling"
+    job = ProfileJob(workspace_id=ws.id, state="queued")
+    session.add(job)
+    await session.commit()
+    await session.refresh(job)
+
+    _enqueue_profile_job(str(ws.id), str(job.id))
+
+    return WorkspaceOut(
+        id=str(ws.id),
+        name=ws.name,
+        dialect=ws.dialect,
+        status=ws.status,
+        profile_job_id=str(job.id),
+    )
 
 
 def _enqueue_profile_job(workspace_id: str, profile_job_id: str) -> None:

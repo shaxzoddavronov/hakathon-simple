@@ -124,6 +124,12 @@ class SqliteEngine:
     def validate_readonly(self, sql: str) -> ValidationResult:
         return validate_readonly(sql, dialect="sqlite")
 
+    async def probe_write_access(self) -> bool:
+        """SQLite is always opened with mode=ro + PRAGMA query_only, so the
+        runtime can never write regardless of file permissions. There are no
+        credentials to be over-privileged, so this is always safe."""
+        return False
+
     async def execute(
         self, sql: str, *, row_cap: int = 1000, timeout_s: int = 10
     ) -> ResultSet:
