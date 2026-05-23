@@ -6,6 +6,7 @@ from app.agents.nodes import (
     answer_writer,
     chart_designer,
     coordinator,
+    dashboard_builder,
     error_responder,
     finalizer,
     query_executor,
@@ -38,6 +39,8 @@ def _route_after_schema(state: GraphState) -> str:
     intent = state.get("intent", "")
     if intent == "metadata":
         return "answer_writer"
+    if intent == "dashboard":
+        return "dashboard_builder"
     return "query_planner"
 
 
@@ -69,6 +72,7 @@ def build_graph():
     g.add_node("query_executor", query_executor.run)
     g.add_node("chart_designer", chart_designer.run)
     g.add_node("answer_writer", answer_writer.run)
+    g.add_node("dashboard_builder", dashboard_builder.run)
     g.add_node("finalizer", finalizer.run)
     g.add_node("error_responder", error_responder.run)
 
@@ -90,6 +94,7 @@ def build_graph():
         {
             "answer_writer": "answer_writer",
             "query_planner": "query_planner",
+            "dashboard_builder": "dashboard_builder",
             "error_responder": "error_responder",
         },
     )
@@ -119,6 +124,7 @@ def build_graph():
 
     g.add_edge("chart_designer", "finalizer")
     g.add_edge("answer_writer", "finalizer")
+    g.add_edge("dashboard_builder", "finalizer")
     g.add_edge("error_responder", "finalizer")
     g.add_edge("finalizer", END)
 

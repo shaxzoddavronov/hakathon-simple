@@ -51,3 +51,26 @@ class AnswerDraft(BaseModel):
         default_factory=list,
         description="Pull-out metrics highlighted in the UI.",
     )
+
+
+class DashboardPanel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    sql: str = Field(description="A single read-only SELECT for this panel.")
+    chart_type: Literal["kpi", "bar", "line", "pie", "table"]
+    x_column: str | None = None
+    y_columns: list[str] = Field(default_factory=list)
+    label_column: str | None = None
+    value_column: str | None = None
+    span: int = Field(default=6, ge=1, le=12, description="Grid width, 1-12.")
+
+
+class DashboardPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dialect: Literal["postgres", "sqlite"]
+    title: str
+    panels: list[DashboardPanel] = Field(
+        description="2-6 complementary panels that together answer the question."
+    )
