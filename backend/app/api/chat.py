@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import get_graph
+from app.agents.llm import get_llm
 from app.api.deps import get_current_user
 from app.db.models import ChatSession, Message, QueryHistory, User, Workspace
 from app.db.session import get_db
@@ -76,12 +77,34 @@ async def _ensure_session(
     return cs
 
 
+async def _ensure_llm_ready() -> None:
+    """Fail fast with 503 if the local model server is unreachable.
+
+    Transparent to tests: a stub LLM without an ``is_ready`` method is
+    assumed ready, so unit/integration tests don't need a live vLLM.
+    """
+    client = get_llm()
+    checker = getattr(client, "is_ready", None)
+    if checker is None:
+        return
+    try:
+        ready = await checker()
+    except Exception:
+        ready = False
+    if not ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local model server (vLLM) is not reachable. Start it and retry.",
+        )
+
+
 @router.post("")
 async def post_chat(
     payload: ChatRequest,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    await _ensure_llm_ready()
     workspace_id = await _resolve_or_workspace_id(session, current_user, payload)
     chat_session = await _ensure_session(
         session, current_user, payload.session_id, workspace_id

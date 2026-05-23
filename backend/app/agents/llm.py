@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import time
 from typing import Any, TypeVar
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
@@ -27,10 +29,32 @@ class LLMClient:
         self._endpoint = endpoint or settings.VLLM_ENDPOINT
         self._model = model or settings.VLLM_MODEL
         self._client = AsyncOpenAI(base_url=self._endpoint, api_key=api_key)
+        self._ready_cache: tuple[float, bool] | None = None  # (checked_at, ok)
 
     @property
     def model(self) -> str:
         return self._model
+
+    async def is_ready(self, *, ttl_s: float = 5.0) -> bool:
+        """Cheap reachability probe against vLLM's /models, cached for ttl_s.
+
+        Used by the chat endpoint to fail fast with 503 rather than start a
+        stream that will die mid-flight when the model server is down.
+        """
+        now = time.monotonic()
+        if self._ready_cache is not None:
+            checked_at, ok = self._ready_cache
+            if now - checked_at < ttl_s:
+                return ok
+        url = f"{self._endpoint.rstrip('/')}/models"
+        try:
+            async with httpx.AsyncClient(timeout=1.5) as client:
+                resp = await client.get(url)
+                ok = resp.status_code < 500
+        except Exception:
+            ok = False
+        self._ready_cache = (now, ok)
+        return ok
 
     async def structured(
         self,
