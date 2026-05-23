@@ -4,6 +4,9 @@
 # Web framework
 fastapi
 uvicorn[standard]
+# Required by FastAPI for OAuth2 form login (/auth/login) and EmailStr fields
+python-multipart
+email-validator
 
 # ORM + drivers
 sqlalchemy[asyncio]>=2.0
