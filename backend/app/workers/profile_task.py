@@ -75,7 +75,12 @@ async def _load_credentials(session: AsyncSession, workspace_id: UUID) -> dict[s
     row = result.scalar_one_or_none()
     if row is None:
         return {}
-    raw = crypto.decrypt(row.ciphertext, row.nonce, key_version=row.key_version)
+    raw = crypto.decrypt(
+        row.ciphertext,
+        row.nonce,
+        key_version=row.key_version,
+        aad=str(workspace_id).encode(),
+    )
     # Stored shape: JSON {"user": ..., "password": ...} for password auth.
     try:
         data = json.loads(raw.decode("utf-8"))

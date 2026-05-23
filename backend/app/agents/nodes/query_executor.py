@@ -50,7 +50,10 @@ async def run(state: GraphState) -> GraphState:
             creds: dict[str, str] = {}
             if creds_row is not None:
                 raw = crypto.decrypt(
-                    creds_row.ciphertext, creds_row.nonce, key_version=creds_row.key_version
+                    creds_row.ciphertext,
+                    creds_row.nonce,
+                    key_version=creds_row.key_version,
+                    aad=str(workspace_id).encode(),
                 )
                 try:
                     parsed = json.loads(raw.decode("utf-8"))
