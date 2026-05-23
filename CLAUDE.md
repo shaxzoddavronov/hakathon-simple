@@ -52,16 +52,25 @@ PLAN.md §"Build Order" is canonical. The ordering is deliberate: security-criti
 
 ## Commands
 
-No build/test/lint commands exist yet — the repo has no `pyproject.toml`, `package.json`, or `docker-compose`. When scaffolding, PLAN.md §"Confirmed Stack" specifies:
+The scaffolding has landed. Real commands:
 
-- Backend: Python 3.11, FastAPI async, SQLAlchemy 2.0 async, Alembic, LangGraph, `sqlglot`, Celery + Redis.
-- Frontend: Next.js 14 App Router, React, TailwindCSS, Recharts.
-- Infra: Postgres 16, Redis, vLLM. Dev compose lives at `infra/docker-compose.dev.yml` (to be created).
+**Backend** (run from `backend/`, after `pip install -r requirements.txt`):
+- Tests: `pytest tests/` — single test: `pytest tests/unit/test_readonly_validator.py::test_malicious_rejected`
+- Unit only (no DB needed): `pytest tests/unit/`
+- The Postgres e2e (`tests/integration/test_e2e_postgres.py`) auto-skips unless a Postgres is reachable on `localhost:55432`; it also needs a `sales_demo` database seeded from `infra/seed/seed_sales.sql`.
+- Migrations: `alembic upgrade head` (creates `pgcrypto` + all 10 tables; needs `DATABASE_URL` set to the Postgres metadata DB).
+- API: `uvicorn app.main:app --port 8080` — **must be 8080**, since vLLM owns 8000 and the frontend hardcodes `localhost:8080` (override via `NEXT_PUBLIC_API_BASE_URL`).
+- Worker: `celery -A app.workers.celery_app worker -l info` — required for schema profiling. Must share the same `.env` as the API (same `QM_MASTER_KEY` + `DATABASE_URL`).
+- vLLM probe: `python scripts/check_vllm.py` — run before the stack to confirm guided-JSON works against your vLLM build.
 
-Once scaffolded, the typical loops will be:
-- Backend: `pytest backend/tests` (single test: `pytest backend/tests/unit/test_readonly_validator.py::test_rejects_drop`)
-- Frontend: `cd frontend && npm run dev` / `npm run build` / `npm run lint`
-- Migrations: `cd backend && alembic upgrade head`
-- vLLM: `vllm serve google/gemma-3-4b-it --guided-decoding-backend xgrammar --max-model-len 8192 --port 8000` (PLAN.md has the full flag set)
+**Frontend** (from `frontend/`): `npm install`, then `npm run dev` / `npm run build` / `npm run lint` / `npm run type-check`.
 
-Update this section once the scaffolding lands and the actual commands are known.
+**Infra**: `docker compose -f infra/docker-compose.dev.yml up -d` (Postgres 16 + Redis; vLLM commented out — run it on the host for GPU access). Test Postgres: `infra/docker-compose.test.yml` (ephemeral, port 55432).
+
+**vLLM**: `vllm serve google/gemma-3-4b-it --guided-decoding-backend xgrammar --max-model-len 8192 --port 8000` (full flag set in PLAN.md §"vLLM + Structured Output").
+
+**End-to-end API smoke** (no browser): `infra/smoke_test.sh` — health → register → login → create workspace → poll profiling → SSE chat.
+
+**Env essentials**: `QM_MASTER_KEY` (base64 32-byte AES-GCM key — same value for API and worker), `DATABASE_URL` (defaults to SQLite; set to Postgres for the real stack), `JWT_SECRET`, `VLLM_ENDPOINT`. See `backend/.env.example`.
+
+CI runs the full backend suite (against a Postgres service) + the frontend build on every push — see `.github/workflows/ci.yml`.

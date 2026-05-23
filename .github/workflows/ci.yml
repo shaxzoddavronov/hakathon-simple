@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: querymind_test
+          POSTGRES_USER: querymind
+          POSTGRES_PASSWORD: querymind
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U querymind -d querymind_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # Metadata DB for the app; the e2e points its data workspace at sales_demo.
+      DATABASE_URL: postgresql+asyncpg://querymind:querymind@localhost:5432/querymind_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-secret-ci-secret-ci-secret-1234
+      # Unreachable on purpose: tests stub the LLM, this guarantees no real calls.
+      VLLM_ENDPOINT: http://localhost:65535/v1
+      # Tell the Postgres e2e where the service is (its default is :55432).
+      QM_TEST_PG_HOST: localhost
+      QM_TEST_PG_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend deps
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Generate AES-GCM master key
+        run: echo "QM_MASTER_KEY=$(python -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())')" >> "$GITHUB_ENV"
+
+      - name: Create + seed the data DB (sales_demo)
+        env:
+          PGPASSWORD: querymind
+        run: |
+          psql -h localhost -U querymind -d querymind_test -c "CREATE DATABASE sales_demo;"
+          psql -h localhost -U querymind -d sales_demo -f infra/seed/seed_sales.sql
+
+      - name: Run backend test suite (unit + Postgres e2e)
+        working-directory: backend
+        run: python -m pytest tests/ -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
