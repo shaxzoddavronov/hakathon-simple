@@ -1,0 +1,41 @@
+# QueryMind AI backend runtime + dev dependencies.
+# Pin only major/minor floors so the resolver can pick compatible patch versions.
+
+# Web framework
+fastapi
+uvicorn[standard]
+
+# ORM + drivers
+sqlalchemy[asyncio]>=2.0
+asyncpg
+aiosqlite
+alembic
+
+# Config / validation
+pydantic>=2
+pydantic-settings
+
+# Auth / crypto
+python-jose[cryptography]
+passlib[bcrypt]
+cryptography
+
+# Background jobs
+celery[redis]
+redis
+
+# SQL parsing (used by the read-only validator)
+sqlglot
+
+# HTTP client + OpenAI-compatible vLLM client
+httpx
+openai
+
+# Agent orchestration
+langgraph
+langchain-core
+
+# Dev / test
+pytest
+pytest-asyncio
+pytest-cov

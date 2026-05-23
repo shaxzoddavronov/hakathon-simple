@@ -1,0 +1,99 @@
+"""FastAPI application factory for QueryMind AI.
+
+Owns the lifespan hook (engine setup + vLLM reachability probe) and the
+top-level router wiring. Importing this module does *not* start the
+event loop — call ``create_app()`` (or run ``uvicorn app.main:app``).
+"""
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import httpx
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api import auth, chat, schema, settings as settings_router, workspaces
+from app.config import settings
+from app.db.session import engine
+
+logger = logging.getLogger("querymind.main")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Startup / shutdown hooks.
+
+    Startup:
+      * Touch the metadata-DB engine pool so misconfiguration fails fast
+        (instead of on the first request).
+      * Ping the local vLLM server. We *warn* on failure rather than
+        crash — vLLM may be slow to come up in dev, and an external
+        health check should report the degraded state.
+
+    Shutdown:
+      * Dispose of the async engine so connection-pool sockets close
+        cleanly.
+    """
+    # `engine` is already created at import time; this is a no-op check
+    # that the URL parsed cleanly and the dialect driver imported.
+    _ = engine.url
+
+    vllm_health_url = f"{settings.VLLM_ENDPOINT.rstrip('/')}/models"
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            response = await client.get(vllm_health_url)
+            response.raise_for_status()
+        logger.info("vLLM reachable at %s", vllm_health_url)
+    except Exception as exc:  # noqa: BLE001 — degraded mode is allowed
+        logger.warning(
+            "vLLM unreachable at %s (%s). Agent nodes will fail until it comes up.",
+            vllm_health_url,
+            exc,
+        )
+
+    try:
+        yield
+    finally:
+        await engine.dispose()
+
+
+def create_app() -> FastAPI:
+    """Build and return the FastAPI application."""
+    app = FastAPI(
+        title="QueryMind AI",
+        version="0.1.0",
+        description=(
+            "Self-hosted NL-to-SQL over user-connected databases. "
+            "All inference runs locally via vLLM."
+        ),
+        lifespan=lifespan,
+    )
+
+    # The frontend dev server runs on :3000 (Next.js default).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Routers are stubs in Wave 1 — they'll grow real routes in later waves.
+    app.include_router(auth.router)
+    app.include_router(workspaces.router)
+    app.include_router(chat.router)
+    app.include_router(schema.router)
+    app.include_router(settings_router.router)
+
+    @app.get("/healthz", tags=["health"], include_in_schema=False)
+    async def healthz() -> dict[str, str]:
+        """Liveness probe — does not touch the DB or vLLM."""
+        return {"status": "ok"}
+
+    return app
+
+
+# Importable as `uvicorn app.main:app`.
+app = create_app()

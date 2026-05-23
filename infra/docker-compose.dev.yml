@@ -1,0 +1,74 @@
+# QueryMind AI — development stack.
+#
+# Brings up the metadata Postgres (with pgcrypto bootstrap) and Redis for
+# Celery. vLLM is intentionally not started here; most users run it on the
+# host so it can see the GPU directly. See the commented-out service below
+# for an in-stack option.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qm_postgres
+    environment:
+      POSTGRES_DB: querymind
+      POSTGRES_USER: querymind
+      POSTGRES_PASSWORD: querymind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Init scripts run once on an empty data dir. pgcrypto must be
+      # installed before Alembic migrations create tables that default to
+      # gen_random_uuid().
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querymind -d querymind"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - qm_dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: qm_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - qm_dev
+
+  # Uncomment to run vLLM in-stack — most users run vLLM on the host for GPU access.
+  # Requires NVIDIA Container Toolkit. The command mirrors the host serving
+  # command documented in infra/README.md.
+  #
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   container_name: qm_vllm
+  #   command: >
+  #     --model google/gemma-3-4b-it
+  #     --guided-decoding-backend xgrammar
+  #     --max-model-len 8192
+  #     --port 8000
+  #   ports:
+  #     - "8000:8000"
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: ["gpu"]
+  #   networks:
+  #     - qm_dev
+
+networks:
+  qm_dev:
+    driver: bridge
+
+volumes:
+  pgdata:

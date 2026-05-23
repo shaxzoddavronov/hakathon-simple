@@ -1,0 +1,31 @@
+# QueryMind AI — test stack.
+#
+# Single ephemeral Postgres on a non-default port so it never clashes with
+# the dev stack. Data lives on tmpfs and is wiped when the container stops.
+# Tests that need SQLite use an in-process file — no container required.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qm_postgres_test
+    environment:
+      POSTGRES_DB: querymind_test
+      POSTGRES_USER: querymind
+      POSTGRES_PASSWORD: querymind
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querymind -d querymind_test"]
+      interval: 3s
+      timeout: 2s
+      retries: 15
+    networks:
+      - qm_test
+
+networks:
+  qm_test:
+    driver: bridge
