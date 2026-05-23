@@ -132,27 +132,26 @@ async def post_chat(
         sql_executed = final_state.get("sql_executed")
 
         # Persist the assistant turn + audit row.
-        async with session.begin_nested():
-            assistant_msg = Message(
-                session_id=chat_session.id,
-                role="assistant",
-                content=_extract_body(ui_spec),
-                ui_spec=ui_spec.model_dump(mode="json") if ui_spec is not None else None,
-            )
-            session.add(assistant_msg)
-            await session.flush()
-            if sql_executed:
-                rs = final_state.get("result")
-                session.add(
-                    QueryHistory(
-                        message_id=assistant_msg.id,
-                        sql_text=sql_executed,
-                        dialect=final_state.get("plan").dialect if final_state.get("plan") else "postgres",
-                        took_ms=rs.took_ms if rs is not None else None,
-                        row_count=rs.row_count if rs is not None else None,
-                        status="ok" if rs is not None else "executor_error",
-                    )
+        assistant_msg = Message(
+            session_id=chat_session.id,
+            role="assistant",
+            content=_extract_body(ui_spec),
+            ui_spec=ui_spec.model_dump(mode="json") if ui_spec is not None else None,
+        )
+        session.add(assistant_msg)
+        await session.flush()
+        if sql_executed:
+            rs = final_state.get("result")
+            session.add(
+                QueryHistory(
+                    message_id=assistant_msg.id,
+                    sql_text=sql_executed,
+                    dialect=final_state.get("plan").dialect if final_state.get("plan") else "postgres",
+                    took_ms=rs.took_ms if rs is not None else None,
+                    row_count=rs.row_count if rs is not None else None,
+                    status="ok" if rs is not None else "executor_error",
                 )
+            )
         await session.commit()
 
         yield _sse(

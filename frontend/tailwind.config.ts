@@ -10,6 +10,9 @@ const config: Config = {
     "./components/**/*.{ts,tsx}",
     "./lib/**/*.{ts,tsx}",
   ],
+  // RenderSpec interpolates `col-span-${ch.span}` for dashboard grids, so JIT
+  // would otherwise drop them. Keep this list tight — only the 12-col widths.
+  safelist: Array.from({ length: 12 }, (_, i) => `col-span-${i + 1}`),
   theme: {
     extend: {
       colors: {
