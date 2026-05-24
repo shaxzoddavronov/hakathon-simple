@@ -153,8 +153,12 @@ export default function SchemaPage() {
             <>
               <div className="flex items-center justify-between gap-3">
                 <div>
+                  <p className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant mb-1">
+                    {selectedTable.schema} schema · {selectedTable.name}
+                  </p>
                   <h2 className="font-headline text-2xl text-on-surface flex items-center gap-2">
                     {selectedTable.name}
+                    <SyncGlyph />
                     <span className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant border border-outline/25 rounded px-2 py-0.5">
                       {data.bundle.dialect}
                     </span>
@@ -193,6 +197,7 @@ export default function SchemaPage() {
                         {c.fk_to ? <Badge tone="tertiary">→ {c.fk_to}</Badge> : null}
                         {c.nullable ? <Badge tone="muted">nullable</Badge> : null}
                       </div>
+                      {s?.numeric_stats ? <MiniBars stats={s.numeric_stats} /> : null}
                       {s ? <SampleLine s={s} /> : null}
                     </GlassPanel>
                   );
@@ -204,9 +209,12 @@ export default function SchemaPage() {
                 <div className="flex items-center gap-2 font-mono text-label-caps uppercase text-primary-container mb-2">
                   <SparkIcon width={16} height={16} /> Semantic Insight
                 </div>
-                <p className="text-on-surface-variant text-sm">
-                  {insightFor(selectedTable)}
-                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-on-surface-variant text-sm flex-1">
+                    {insightFor(selectedTable)}
+                  </p>
+                  <Waveform />
+                </div>
               </GlassPanel>
             </>
           ) : (
@@ -278,6 +286,66 @@ function Badge({
     >
       {children}
     </span>
+  );
+}
+
+function MiniBars({ stats }: { stats: Record<string, number> }) {
+  const entries = Object.entries(stats).slice(0, 5);
+  const max = Math.max(...entries.map(([, v]) => Math.abs(v)), 1);
+  return (
+    <div className="flex items-end gap-1.5 h-12 pt-1">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex-1 flex flex-col items-center gap-1" title={`${k}=${v}`}>
+          <div
+            className="w-full rounded-sm bg-primary-container/60"
+            style={{ height: `${Math.max(3, (Math.abs(v) / max) * 32)}px` }}
+          />
+          <span className="font-mono text-[8px] uppercase text-on-surface-variant w-full text-center truncate">
+            {k}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SyncGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={16}
+      height={16}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-primary-container"
+      aria-hidden
+    >
+      <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+      <path d="M21 4v5h-5" />
+    </svg>
+  );
+}
+
+function Waveform() {
+  return (
+    <svg
+      viewBox="0 0 120 36"
+      width={120}
+      height={36}
+      className="text-primary-container shrink-0"
+      aria-hidden
+    >
+      <polyline
+        points="0,18 8,12 16,22 24,8 32,26 40,14 48,20 56,6 64,28 72,16 80,22 88,10 96,24 104,14 112,20 120,18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        opacity="0.7"
+      />
+    </svg>
   );
 }
 

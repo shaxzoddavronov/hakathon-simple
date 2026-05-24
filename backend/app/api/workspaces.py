@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.db.models import ProfileJob, User, Workspace, WorkspaceCredentials
@@ -37,6 +38,8 @@ class WorkspaceOut(BaseModel):
     dialect: str
     status: str
     profile_job_id: str | None = None
+    table_count: int | None = None
+    last_synced_at: str | None = None
 
 
 class ProbeRequest(BaseModel):
@@ -162,17 +165,28 @@ async def list_workspaces(
     rows = await session.execute(
         select(Workspace)
         .where(Workspace.owner_id == current_user.id)
+        .options(selectinload(Workspace.schema_bundle))
         .order_by(Workspace.created_at.desc())
     )
-    return [
-        WorkspaceOut(
-            id=str(w.id),
-            name=w.name,
-            dialect=w.dialect,
-            status=w.status,
+    out: list[WorkspaceOut] = []
+    for w in rows.scalars().all():
+        bundle = w.schema_bundle
+        tables = (bundle.bundle or {}).get("tables") if bundle else None
+        out.append(
+            WorkspaceOut(
+                id=str(w.id),
+                name=w.name,
+                dialect=w.dialect,
+                status=w.status,
+                table_count=len(tables) if isinstance(tables, list) else None,
+                last_synced_at=(
+                    bundle.refreshed_at.isoformat()
+                    if bundle and bundle.refreshed_at
+                    else None
+                ),
+            )
         )
-        for w in rows.scalars().all()
-    ]
+    return out
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceOut)

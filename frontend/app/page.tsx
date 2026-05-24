@@ -13,7 +13,22 @@ type WorkspaceOut = {
   name: string;
   dialect: string;
   status: string;
+  table_count?: number | null;
+  last_synced_at?: string | null;
 };
+
+function timeAgo(iso?: string | null): string {
+  if (!iso) return "never";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "never";
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 const STATUS_TINT: Record<string, string> = {
   pending: "text-on-surface-variant",
@@ -96,22 +111,28 @@ export default function WorkspacesPage() {
                     >
                       <DatabaseIcon />
                     </span>
-                    <span
-                      className={
-                        "font-mono text-label-caps uppercase " +
-                        (STATUS_TINT[w.status] ?? "text-on-surface-variant")
-                      }
-                    >
-                      {w.status}
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant border border-outline/25 rounded-full px-2 py-0.5">
+                      {w.dialect}
                     </span>
                   </div>
 
                   <h2 className="font-headline text-lg text-on-surface mt-4">
                     {w.name}
                   </h2>
-                  <p className="font-mono text-data-mono text-on-surface-variant mt-1 uppercase">
-                    {w.dialect}
-                  </p>
+                  <div className="mt-1 space-y-0.5 font-mono text-data-mono text-on-surface-variant">
+                    <div>
+                      {w.table_count != null ? `${w.table_count} tables` : "— tables"}
+                    </div>
+                    <div>Last synced {timeAgo(w.last_synced_at)}</div>
+                  </div>
+                  <div
+                    className={
+                      "mt-2 font-mono text-[11px] uppercase tracking-wider " +
+                      (STATUS_TINT[w.status] ?? "text-on-surface-variant")
+                    }
+                  >
+                    ● {w.status}
+                  </div>
 
                   <div className="flex gap-2 mt-5 pt-1">
                     <Link
@@ -157,9 +178,15 @@ export default function WorkspacesPage() {
             <Stat icon={<TrendIcon width={16} height={16} />} value={String(ready)} label="Ready" />
             <Stat value="local" label="vLLM Engine" />
             <div className="flex-1" />
-            <div className="flex items-center gap-2 text-tertiary">
-              <span className="qm-pulse-dot" />
-              <span className="font-mono text-data-mono">Local Engine Active</span>
+            <div className="text-right max-w-xs">
+              <div className="flex items-center justify-end gap-2 text-tertiary">
+                <span className="qm-pulse-dot" />
+                <span className="font-mono text-data-mono">Live Engine Active</span>
+              </div>
+              <p className="text-on-surface-variant text-xs mt-1">
+                QueryMind processes queries locally across {items.length}{" "}
+                workspace{items.length === 1 ? "" : "s"}. All systems nominal.
+              </p>
             </div>
           </GlassPanel>
         </>
