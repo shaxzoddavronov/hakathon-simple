@@ -9,19 +9,18 @@ import {
   GearIcon,
   SparkIcon,
   TableIcon,
-  TerminalIcon,
 } from "@/components/icons";
 import { clearToken } from "@/lib/api";
 
 const RAIL = [
   { href: "/", label: "Dashboard", icon: TableIcon },
   { href: "/chat", label: "Neural Engine", icon: SparkIcon },
-  { href: "/settings", label: "Datasets", icon: TerminalIcon },
+  { href: "/settings", label: "Settings", icon: GearIcon },
 ];
 
 /**
- * App chrome: a thin left icon rail + the top bar, wrapping page content.
- * Both hide on the auth pages (login/register), which render bare.
+ * App chrome: a thin left icon rail wrapping page content.
+ * Hidden on the auth pages (login/register), which render bare.
  */
 export function Chrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -66,14 +65,6 @@ export function Chrome({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <Link
-          href="/settings"
-          title="Settings"
-          aria-label="Settings"
-          className="grid h-10 w-10 place-items-center rounded-lg text-on-surface-variant hover:text-on-surface transition"
-        >
-          <GearIcon width={20} height={20} />
-        </Link>
         <button
           title="Sign out"
           aria-label="Sign out"
