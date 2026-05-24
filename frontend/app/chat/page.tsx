@@ -133,7 +133,7 @@ export default function ChatPage() {
   const activeName = workspaces.find((w) => w.id === activeWs)?.name;
 
   return (
-    <main className="mx-auto max-w-4xl px-container-margin py-5 flex flex-col h-[calc(100vh-61px)]">
+    <main className="mx-auto max-w-4xl px-container-margin py-5 flex flex-col h-screen">
       {/* Connected-DB context bar */}
       <div className="flex items-center justify-between gap-3 pb-4">
         <div className="flex items-center gap-2 text-on-surface">

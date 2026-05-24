@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AppHeader } from "@/components/AppHeader";
 import {
   ArrowLeftIcon,
   GearIcon,
@@ -35,7 +34,7 @@ export function Chrome({ children }: { children: ReactNode }) {
   return (
     <>
       {/* Left icon rail */}
-      <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-full w-16 flex-col items-center border-r border-outline/15 bg-surface/70 backdrop-blur-xl py-4">
+      <aside className="flex fixed left-0 top-0 z-40 h-full w-16 flex-col items-center border-r border-outline/15 bg-surface/70 backdrop-blur-xl py-4">
         <Link
           href="/"
           aria-label="QueryMind home"
@@ -88,11 +87,8 @@ export function Chrome({ children }: { children: ReactNode }) {
         </button>
       </aside>
 
-      {/* Header + content, offset for the rail on large screens */}
-      <div className="lg:pl-16">
-        <AppHeader />
-        {children}
-      </div>
+      {/* Content, offset for the fixed rail */}
+      <div className="pl-16">{children}</div>
     </>
   );
 }
