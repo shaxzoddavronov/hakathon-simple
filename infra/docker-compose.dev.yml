@@ -50,8 +50,7 @@ services:
   #   image: vllm/vllm-openai:latest
   #   container_name: qm_vllm
   #   command: >
-  #     --model google/gemma-3-4b-it
-  #     --guided-decoding-backend xgrammar
+  #     --model Qwen/Qwen2.5-0.5B-Instruct
   #     --max-model-len 8192
   #     --port 8000
   #   ports:

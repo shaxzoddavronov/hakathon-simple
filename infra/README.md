@@ -12,12 +12,15 @@ cd backend && alembic upgrade head
 
 ## Start vLLM on the host (recommended — needs your GPU)
 ```bash
-vllm serve google/gemma-3-4b-it \
-  --guided-decoding-backend xgrammar \
+vllm serve Qwen/Qwen2.5-0.5B-Instruct \
   --max-model-len 8192 \
   --port 8000
 ```
 The OpenAI-compatible endpoint will then be reachable at `http://localhost:8000/v1`.
+xgrammar is vLLM's default structured-outputs backend now, so no flag is needed
+(the old `--guided-decoding-backend` was removed in vLLM 0.21). On a host without
+the CUDA toolkit (`nvcc`), add `--enforce-eager` and set
+`VLLM_USE_FLASHINFER_SAMPLER=0` to avoid JIT compilation.
 
 ## Run the ephemeral test Postgres (port 55432)
 ```bash

@@ -8,7 +8,7 @@
 
 **Confirmed v1 scope (per user decisions in this session):**
 - **Dialects:** Postgres + SQLite only. The `QueryEngine` adapter is designed so MySQL / MSSQL / MongoDB plug in later without rewrites.
-- **Model:** `google/gemma-3-4b-it` served by vLLM with `xgrammar` guided decoding.
+- **Model:** `Qwen/Qwen2.5-0.5B-Instruct` served by vLLM with `xgrammar` guided decoding. (Swappable via `VLLM_MODEL`; 0.5B is small, so NL→SQL quality is limited — bump to a larger Qwen2.5 or a gemma for production-grade answers.)
 - **Auth:** Multi-user — email/password + JWT, bcrypt, per-user workspace isolation.
 - **Code base:** Greenfield. Do not restore prior commit.
 
@@ -23,7 +23,7 @@
 | Migrations | Alembic | Standard, integrates with SQLAlchemy |
 | Agent graph | LangGraph | Native fan-out, retry loops, typed state |
 | LLM runtime | vLLM (OpenAI-compatible REST) | Local, supports `xgrammar` JSON-schema guided decoding |
-| Model | `google/gemma-3-4b-it` | Fits comfortably on one L40S; reliable JSON mode |
+| Model | `Qwen/Qwen2.5-0.5B-Instruct` | Tiny — runs on minimal GPU; reliable JSON mode via xgrammar (swap up for better SQL quality) |
 | SQL parser/validator | `sqlglot` | Dialect-aware AST walking; safer than regex |
 | Background jobs | Celery + Redis | Schema profiling is async; Redis also brokers SSE |
 | App metadata DB | Postgres 16 | Single source of truth for app state |
@@ -204,20 +204,23 @@ Coordinator turns non-`Resolved` outcomes into `intent="clarify"` and emits a `t
 **Serving command (GPU 0; GPU 1 reserved as hot standby):**
 
 ```
-vllm serve google/gemma-3-4b-it \
+vllm serve Qwen/Qwen2.5-0.5B-Instruct \
   --tensor-parallel-size 1 \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.85 \
-  --guided-decoding-backend xgrammar \
   --enable-prefix-caching \
   --port 8000
+# xgrammar is the default structured-outputs backend (the old
+# --guided-decoding-backend flag was removed in vLLM 0.21). On a host
+# without the CUDA toolkit (nvcc), add: --enforce-eager and set env
+# VLLM_USE_FLASHINFER_SAMPLER=0 to skip JIT compilation.
 ```
 
 **LLM call shape** — OpenAI-compatible:
 
 ```python
 client.chat.completions.create(
-    model="google/gemma-3-4b-it",
+    model="Qwen/Qwen2.5-0.5B-Instruct",
     messages=[...],
     response_format={
         "type": "json_schema",
@@ -291,7 +294,7 @@ profile_jobs(id uuid PK, workspace_id uuid FK,
              started_at, finished_at, error text NULL)
 
 settings(user_id uuid PK/FK, vllm_endpoint text DEFAULT 'http://localhost:8000/v1',
-         model text DEFAULT 'google/gemma-3-4b-it', updated_at)
+         model text DEFAULT 'Qwen/Qwen2.5-0.5B-Instruct', updated_at)
 ```
 
 Indexes: `messages(session_id, created_at)`, `query_history(workspace_id, created_at)`, `workspaces(user_id, name)`. Single Alembic migration `0001_initial.py`. Use `pgcrypto` for `gen_random_uuid()`.
@@ -415,7 +418,7 @@ infra/
 1. **Foundations** — `pyproject.toml`, FastAPI skeleton, Postgres + Alembic, JWT auth, frontend scaffold with Tailwind tokens, dev docker-compose.
 2. **QueryEngine + read-only validator** — `engines/base.py` + `postgres.py` + `sqlite.py` + `services/readonly_validator.py` with the malicious-corpus unit tests (TDD: write the tests first, they encode the security spec).
 3. **Schema profiler + Celery worker** — `services/schema_profiler.py`, `workers/profile_task.py`, `POST /workspaces` end-to-end (creates row, enqueues job, persists bundle).
-4. **vLLM bring-up** — install vLLM, launch Gemma-3-4B-IT on GPU 0, verify `/v1/chat/completions` with a `response_format` JSON-schema call from a curl smoke test.
+4. **vLLM bring-up** — install vLLM, launch Qwen2.5-0.5B-Instruct on GPU 0, verify `/v1/chat/completions` with a `response_format` JSON-schema call from a curl smoke test.
 5. **LangGraph agents** — `graph.py`, `state.py`, `nodes/*.py`, planner/validator retry loop with mocked LLM, then wire to real vLLM.
 6. **Chat API + SSE streaming** — `POST /chat` invokes the graph and streams node-level events.
 7. **Frontend pages** — Workspaces grid, Connect form, Schema Explorer, Neural Chat (with `RenderSpec`, `CodeBlock`, `WorkspacePicker`), Settings.
@@ -471,7 +474,7 @@ SELECT * FROM dblink('...','DROP TABLE x');
 
 ## Known Risks & Mitigations
 
-- **Gemma-3-4B may produce subtly wrong SQL** (hallucinated columns, wrong dialect). Mitigation: schema is literally in the prompt; validator catches structural issues; planner ↔ validator retry loop catches semantic issues. Expect ~5-15% retry rate — budget for it in the demo script.
+- **The model may produce subtly wrong SQL** (hallucinated columns, wrong dialect) — and more so with the small Qwen2.5-0.5B default. Mitigation: schema is literally in the prompt; validator catches structural issues; planner ↔ validator retry loop catches semantic issues. Expect a meaningful retry rate at 0.5B (well above the ~5-15% a 4B-class model would see) — budget for it, or serve a larger model.
 - **vLLM cold start ~30s.** Keep the server always running during the demo; FastAPI health-checks it on startup and refuses chat requests until ready.
 - **L40S idle power.** Both GPUs powered on but only GPU 0 actively serving — acceptable for hackathon hardware.
 - **Greenfield risk.** No prior code reuse means ~3 extra engineering days compared to salvaging. Mitigation: build order above front-loads the security-critical pieces (validator, engine adapter) so the riskiest code is also the most tested.

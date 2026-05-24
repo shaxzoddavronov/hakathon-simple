@@ -7,7 +7,7 @@ LLM-driven node will fail too — so check it here first, in isolation.
 
 Usage:
     cd backend
-    VLLM_ENDPOINT=http://localhost:8000/v1 VLLM_MODEL=google/gemma-3-4b-it \
+    VLLM_ENDPOINT=http://localhost:8000/v1 VLLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct \
       python scripts/check_vllm.py
 """
 from __future__ import annotations
@@ -70,7 +70,7 @@ async def main() -> int:
         return 3
 
     print("All checks passed. vLLM guided JSON works with the agent's call shape.")
-    print("Note: this proves the *integration*, not gemma-3-4b's SQL *quality* —")
+    print("Note: this proves the *integration*, not the model's SQL *quality* —")
     print("watch query_history for validator rejections once you run real queries.")
     return 0
 

@@ -12,7 +12,7 @@ The prior Elasticsearch-flavored scaffold was deleted on purpose; do not restore
 
 ## Product in one paragraph
 
-**QueryMind AI** — users connect their own database (Postgres or SQLite in v1), the backend deterministically introspects the schema, and a LangGraph agent generates **read-only** SQL from natural-language questions, executes it, and returns a written answer plus an optional chart spec. It is self-hosted and runs **only** against a local vLLM server (`google/gemma-3-4b-it` with `xgrammar` guided decoding) — no external AI APIs.
+**QueryMind AI** — users connect their own database (Postgres or SQLite in v1), the backend deterministically introspects the schema, and a LangGraph agent generates **read-only** SQL from natural-language questions, executes it, and returns a written answer plus an optional chart spec. It is self-hosted and runs **only** against a local vLLM server (`Qwen/Qwen2.5-0.5B-Instruct` with `xgrammar` guided decoding) — no external AI APIs.
 
 ## Architecture invariants (do not violate without updating PLAN.md)
 
@@ -66,7 +66,7 @@ The scaffolding has landed. Real commands:
 
 **Infra**: `docker compose -f infra/docker-compose.dev.yml up -d` (Postgres 16 + Redis; vLLM commented out — run it on the host for GPU access). Test Postgres: `infra/docker-compose.test.yml` (ephemeral, port 55432).
 
-**vLLM**: `vllm serve google/gemma-3-4b-it --guided-decoding-backend xgrammar --max-model-len 8192 --port 8000` (full flag set in PLAN.md §"vLLM + Structured Output").
+**vLLM**: `vllm serve Qwen/Qwen2.5-0.5B-Instruct --max-model-len 8192 --port 8000` (xgrammar is vLLM's default structured-outputs backend; the old `--guided-decoding-backend` flag was removed in vLLM 0.21. On a host without the CUDA toolkit, add `--enforce-eager` + `VLLM_USE_FLASHINFER_SAMPLER=0`. See PLAN.md §"vLLM + Structured Output").
 
 **End-to-end API smoke** (no browser): `infra/smoke_test.sh` — health → register → login → create workspace → poll profiling → SSE chat.
 
