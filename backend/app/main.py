@@ -77,14 +77,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Allowed browser origins come from CORS_ORIGINS (comma-separated) so a
-    # server-IP deploy can add e.g. http://<server-ip>:3000.
+    # Allowed browser origins come from CORS_ORIGINS (comma-separated). Set it
+    # to "*" to allow any origin — valid here because auth is Bearer-token, not
+    # cookie-based, so we disable credentials (Allow-Origin "*" + credentials is
+    # rejected by browsers).
+    _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+    _allow_all = "*" in _origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()
-        ],
-        allow_credentials=True,
+        allow_origins=["*"] if _allow_all else _origins,
+        allow_credentials=not _allow_all,
         allow_methods=["*"],
         allow_headers=["*"],
     )
