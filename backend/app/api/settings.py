@@ -38,7 +38,9 @@ async def _list_models(endpoint: str, api_key: str) -> list[str]:
         async with httpx.AsyncClient(timeout=4.0) as c:
             r = await c.get(url, headers=headers)
             data = r.json().get("data", [])
-            return [m["id"] for m in data if isinstance(m, dict) and m.get("id")]
+            ids = [m["id"] for m in data if isinstance(m, dict) and m.get("id")]
+            # Only Qwen models are supported — hide everything else (e.g. gemma).
+            return [m for m in ids if "qwen" in m.lower()]
     except Exception:
         return []
 
