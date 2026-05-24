@@ -81,3 +81,98 @@ body {
   );
   background-size: 24px 24px;
 }
+
+/* ── Neural Dark flourishes (DESIGN.md §Elevation, §Components) ───────────── */
+
+/* Luminous cyan glow for active/primary elements. */
+.qm-glow {
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+}
+.qm-glow-strong {
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.45);
+}
+
+/* 1px animated cyan→violet gradient border for "featured" panels.
+   Uses a masked pseudo-element so the fill stays transparent. */
+.qm-gradient-border {
+  position: relative;
+}
+.qm-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    120deg,
+    #00d4ff,
+    #6001d1 50%,
+    #00d4ff
+  );
+  background-size: 200% 200%;
+  animation: qm-border-flow 6s ease infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@keyframes qm-border-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Pulsing bioluminescent status dot (DESIGN.md §Chips/Status). */
+.qm-pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #00ff88;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.8);
+}
+.qm-pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #00ff88;
+  animation: qm-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes qm-ping {
+  0% { transform: scale(1); opacity: 0.7; }
+  80%, 100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Underline-style input (DESIGN.md §Inputs): no box, animated cyan underline. */
+.qm-underline {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  padding: 0.5rem 0.25rem;
+  color: var(--qm-on-surface);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.qm-underline::placeholder {
+  color: rgba(187, 201, 207, 0.45);
+}
+.qm-underline:focus {
+  border-bottom: 2px solid var(--qm-primary-container);
+  box-shadow: 0 6px 12px -10px rgba(0, 212, 255, 0.7);
+}
+
+/* Indeterminate cyan→violet progress sweep (chat "analyzing" state). */
+.qm-sweep {
+  background: linear-gradient(90deg, #00d4ff, #6001d1, #00d4ff);
+  background-size: 200% 100%;
+  animation: qm-sweep-move 1.4s linear infinite;
+}
+@keyframes qm-sweep-move {
+  0% { background-position: 200% 0; }
+  100% { background-position: 0 0; }
+}

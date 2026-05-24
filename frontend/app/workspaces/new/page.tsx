@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { CodeBlock } from "@/components/CodeBlock";
 import { GlassPanel } from "@/components/GlassPanel";
+import { DatabaseIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
 type Dialect = "postgres" | "sqlite";
@@ -21,6 +22,11 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 # Make sure the file is readable by the backend process,
 # and that no other process has it open for write at demo time.`,
 };
+
+const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
+  { id: "postgres", label: "PostgreSQL", icon: <DatabaseIcon width={28} height={28} /> },
+  { id: "sqlite", label: "SQLite", icon: <TableIcon width={28} height={28} /> },
+];
 
 export default function NewWorkspacePage() {
   const router = useRouter();
@@ -86,13 +92,7 @@ export default function NewWorkspacePage() {
       const auth_kind = dialect === "postgres" ? "password" : "none";
       await api("/workspaces", {
         method: "POST",
-        body: JSON.stringify({
-          name,
-          dialect,
-          connection_meta,
-          credentials,
-          auth_kind,
-        }),
+        body: JSON.stringify({ name, dialect, connection_meta, credentials, auth_kind }),
       });
       router.push("/");
     } catch (err) {
@@ -103,189 +103,155 @@ export default function NewWorkspacePage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-      <header>
-        <p className="font-mono text-label-caps uppercase text-on-surface-variant">
-          New workspace
-        </p>
-        <h1 className="font-headline text-headline-lg text-on-surface mt-1">
-          Connect a database
-        </h1>
-        <p className="text-on-surface-variant text-sm mt-1">
-          QueryMind runs read-only queries against this connection. Use a
-          dedicated read-only role for production data.
-        </p>
-      </header>
+    <main className="mx-auto max-w-3xl px-container-margin py-10">
+      <GlassPanel className="qm-gradient-border p-7 sm:p-8">
+        {/* Setup phase header */}
+        <div className="flex items-center justify-between font-mono text-label-caps uppercase text-on-surface-variant">
+          <span>Setup Phase</span>
+          <span>Workspace · Read-only</span>
+        </div>
+        <div className="mt-2 h-0.5 w-full rounded-full bg-surface-container-high/60 overflow-hidden">
+          <div className="qm-sweep h-full w-1/3" />
+        </div>
+        <div className="mt-1.5 flex justify-between font-mono text-[11px] uppercase tracking-wider">
+          <span className="text-primary-container">Identity</span>
+          <span className="text-on-surface-variant">Connection</span>
+          <span className="text-on-surface-variant">Intelligence</span>
+        </div>
 
-      <form onSubmit={submit} className="space-y-4">
-        <GlassPanel className="px-5 py-4 space-y-3">
-          <Field label="Name">
+        <form onSubmit={submit} className="mt-8 space-y-8">
+          {/* Workspace definition */}
+          <div>
+            <p className="font-mono text-label-caps uppercase text-on-surface-variant mb-2">
+              Workspace Definition
+            </p>
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Core_Analytics"
-              className="w-full input"
+              placeholder="Name your workspace…"
+              className="qm-underline w-full font-headline text-2xl"
             />
-          </Field>
-          <Field label="Dialect">
-            <div className="flex gap-2">
-              {(["postgres", "sqlite"] as Dialect[]).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDialect(d)}
-                  className={
-                    "px-3 py-1.5 rounded-xl text-sm " +
-                    (dialect === d
-                      ? "bg-primary-container/30 text-primary"
-                      : "bg-surface-container-high/40 text-on-surface-variant")
-                  }
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </Field>
+          </div>
 
-          {dialect === "postgres" ? (
-            <>
-              <Field label="Host">
-                <input
-                  required
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  className="w-full input"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Port">
-                  <input
-                    required
-                    type="number"
-                    value={port}
-                    onChange={(e) => setPort(e.target.value)}
-                    className="w-full input"
-                  />
+          {/* Architecture selector */}
+          <div>
+            <p className="text-on-surface mb-3">Select primary data architecture</p>
+            <div className="grid grid-cols-2 gap-4">
+              {ARCHS.map((a) => {
+                const active = dialect === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setDialect(a.id)}
+                    className={
+                      "rounded-lg border p-6 flex flex-col items-center gap-3 transition " +
+                      (active
+                        ? "border-primary-container/70 bg-primary-container/10 text-primary-container qm-glow"
+                        : "border-outline/25 text-on-surface-variant hover:border-outline/50")
+                    }
+                  >
+                    {a.icon}
+                    <span className="font-mono text-sm tracking-wide">{a.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Connection */}
+          <div className="space-y-5">
+            <p className="font-mono text-label-caps uppercase text-on-surface-variant">
+              Connection
+            </p>
+            {dialect === "postgres" ? (
+              <>
+                <Field label="Host">
+                  <input required value={host} onChange={(e) => setHost(e.target.value)} className="qm-underline w-full" />
                 </Field>
-                <Field label="Database">
-                  <input
-                    required
-                    value={dbName}
-                    onChange={(e) => setDbName(e.target.value)}
-                    className="w-full input"
-                  />
-                </Field>
-              </div>
-              <Field label="User">
+                <div className="grid grid-cols-2 gap-5">
+                  <Field label="Port">
+                    <input required type="number" value={port} onChange={(e) => setPort(e.target.value)} className="qm-underline w-full" />
+                  </Field>
+                  <Field label="Database">
+                    <input required value={dbName} onChange={(e) => setDbName(e.target.value)} className="qm-underline w-full" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <Field label="User">
+                    <input required value={user} onChange={(e) => setUser(e.target.value)} className="qm-underline w-full" />
+                  </Field>
+                  <Field label="Password">
+                    <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="qm-underline w-full" />
+                  </Field>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-on-surface-variant">
+                  <input type="checkbox" checked={ssl} onChange={(e) => setSsl(e.target.checked)} />
+                  Require TLS (ssl=require)
+                </label>
+              </>
+            ) : (
+              <Field label="SQLite file path">
                 <input
                   required
-                  value={user}
-                  onChange={(e) => setUser(e.target.value)}
-                  className="w-full input"
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  placeholder="/var/lib/querymind/sample.db"
+                  className="qm-underline w-full"
                 />
               </Field>
-              <Field label="Password">
-                <input
-                  required
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full input"
-                />
-              </Field>
-              <label className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <input
-                  type="checkbox"
-                  checked={ssl}
-                  onChange={(e) => setSsl(e.target.checked)}
-                />
-                Require TLS (ssl=require)
-              </label>
-            </>
-          ) : (
-            <Field label="SQLite file path">
-              <input
-                required
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="/var/lib/querymind/sample.db"
-                className="w-full input"
-              />
-            </Field>
-          )}
+            )}
+          </div>
 
           {error ? <div className="text-error text-sm">{error}</div> : null}
-
           {probe ? (
             <div
               className={
-                "rounded-xl px-4 py-3 text-sm border " +
-                (!probe.reachable
+                "rounded-lg px-4 py-3 text-sm border " +
+                (!probe.reachable || probe.can_write
                   ? "border-error/40 bg-error-container/20 text-error"
-                  : probe.can_write
-                    ? "border-error/40 bg-error-container/20 text-error"
-                    : "border-tertiary/40 bg-tertiary/10 text-tertiary")
+                  : "border-tertiary/40 bg-tertiary/10 text-tertiary")
               }
             >
               {probe.message}
             </div>
           ) : null}
 
-          <div className="flex gap-2">
+          <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={testConnection}
               disabled={probing}
-              className="flex-1 rounded-xl border border-outline/30 text-on-surface py-2 font-semibold disabled:opacity-50 hover:bg-surface-container-high/40"
+              className="rounded-lg border border-outline/30 text-on-surface px-5 py-2.5 font-semibold disabled:opacity-50 hover:border-primary-container/60 hover:text-primary-container transition"
             >
               {probing ? "Testing…" : "Test connection"}
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="flex-1 rounded-xl bg-primary-container text-on-primary-container py-2 font-semibold disabled:opacity-50"
+              className="rounded-lg bg-primary-container text-on-primary-container px-7 py-2.5 font-semibold qm-glow disabled:opacity-50 transition hover:opacity-90"
             >
-              {busy ? "Creating…" : "Create workspace"}
+              {busy ? "Creating…" : "Continue"}
             </button>
           </div>
-        </GlassPanel>
+        </form>
+      </GlassPanel>
 
-        <GlassPanel className="px-5 py-4">
-          <p className="text-on-surface-variant text-sm mb-2">
-            Read-only setup recipe for {dialect}:
-          </p>
-          <CodeBlock language={dialect} code={GRANT_RECIPE[dialect]} />
-        </GlassPanel>
-      </form>
-
-      <style jsx>{`
-        :global(.input) {
-          background: rgba(27, 42, 69, 0.6);
-          border: 1px solid rgba(133, 147, 152, 0.2);
-          border-radius: 0.75rem;
-          padding: 0.5rem 1rem;
-          color: #d7e2ff;
-          outline: none;
-        }
-        :global(.input:focus) {
-          border-color: #a8e8ff;
-        }
-      `}</style>
+      <GlassPanel className="mt-5 px-6 py-5">
+        <p className="font-mono text-label-caps uppercase text-on-surface-variant mb-2">
+          Read-only setup recipe · {dialect}
+        </p>
+        <CodeBlock language={dialect} code={GRANT_RECIPE[dialect]} />
+      </GlassPanel>
     </main>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs uppercase tracking-wider text-on-surface-variant">
+      <span className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant">
         {label}
       </span>
       {children}

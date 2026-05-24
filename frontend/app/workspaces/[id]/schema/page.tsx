@@ -1,9 +1,10 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { GlassPanel } from "@/components/GlassPanel";
+import { SearchIcon, SparkIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
 type Sample = {
@@ -47,6 +48,7 @@ export default function SchemaPage() {
   const [data, setData] = useState<Resp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     if (!getToken()) {
@@ -57,42 +59,69 @@ export default function SchemaPage() {
       .then((d) => {
         setData(d);
         const first = d.bundle?.tables[0];
-        if (first) {
-          setSelected(`${first.schema}.${first.name}`);
-        }
+        if (first) setSelected(`${first.schema}.${first.name}`);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [params.id, router]);
 
-  if (error) return <PageShell><GlassPanel className="px-5 py-4 text-error">{error}</GlassPanel></PageShell>;
-  if (!data) return <PageShell><GlassPanel className="px-5 py-4 text-on-surface-variant">Loading…</GlassPanel></PageShell>;
-  if (!data.bundle) {
+  const tables = data?.bundle?.tables ?? [];
+  const filtered = useMemo(
+    () => tables.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase())),
+    [tables, filter],
+  );
+  const selectedTable = tables.find((t) => `${t.schema}.${t.name}` === selected);
+  const samples = (selected && data?.bundle?.samples[selected]) || {};
+
+  function chatWithTable() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("qm_active_ws_id", params.id);
+    }
+    router.push("/chat");
+  }
+
+  if (error)
     return (
-      <PageShell>
+      <Shell>
+        <GlassPanel className="px-5 py-4 text-error">{error}</GlassPanel>
+      </Shell>
+    );
+  if (!data)
+    return (
+      <Shell>
+        <GlassPanel className="px-5 py-4 text-on-surface-variant">Loading…</GlassPanel>
+      </Shell>
+    );
+  if (!data.bundle)
+    return (
+      <Shell>
         <GlassPanel className="px-5 py-4">
           <div className="text-on-surface">Status: {data.status}</div>
           <div className="text-on-surface-variant text-sm mt-1">
             {data.message ?? "Bundle not available."}
           </div>
         </GlassPanel>
-      </PageShell>
+      </Shell>
     );
-  }
-
-  const selectedTable = data.bundle.tables.find(
-    (t) => `${t.schema}.${t.name}` === selected,
-  );
-  const samples = (selected && data.bundle.samples[selected]) || {};
 
   return (
-    <PageShell>
-      <div className="grid grid-cols-12 gap-4">
-        <GlassPanel className="col-span-4 px-3 py-3 overflow-y-auto max-h-[80vh]">
-          <div className="text-xs uppercase tracking-wider text-on-surface-variant px-2 pb-2">
-            Tables ({data.bundle.tables.length})
+    <Shell>
+      <div className="grid grid-cols-12 gap-5">
+        {/* Sidebar */}
+        <GlassPanel className="col-span-12 lg:col-span-3 p-3 lg:max-h-[78vh] overflow-y-auto">
+          <div className="flex items-center gap-2 rounded-lg border border-outline/20 bg-surface-container/40 px-3 py-1.5 text-on-surface-variant">
+            <SearchIcon width={16} height={16} />
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Search tables…"
+              className="bg-transparent text-sm outline-none w-full text-on-surface placeholder:text-on-surface-variant/60"
+            />
+          </div>
+          <div className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant px-2 pt-3 pb-2">
+            Schema Objects · {tables.length}
           </div>
           <ul className="space-y-0.5">
-            {data.bundle.tables.map((t) => {
+            {filtered.map((t) => {
               const qn = `${t.schema}.${t.name}`;
               const active = qn === selected;
               return (
@@ -100,15 +129,16 @@ export default function SchemaPage() {
                   <button
                     onClick={() => setSelected(qn)}
                     className={
-                      "w-full text-left px-3 py-2 rounded-lg font-mono text-sm " +
+                      "w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg font-mono text-sm transition " +
                       (active
-                        ? "bg-primary-container/30 text-primary"
+                        ? "bg-primary-container/15 text-primary-container qm-glow"
                         : "text-on-surface hover:bg-surface-container-high/30")
                     }
                   >
-                    {t.name}
-                    <span className="ml-2 text-xs text-on-surface-variant">
-                      {t.columns.length} cols
+                    <TableIcon width={15} height={15} />
+                    <span className="flex-1 truncate">{t.name}</span>
+                    <span className="text-[11px] text-on-surface-variant">
+                      {t.columns.length}
                     </span>
                   </button>
                 </li>
@@ -117,96 +147,143 @@ export default function SchemaPage() {
           </ul>
         </GlassPanel>
 
-        <div className="col-span-8 space-y-4">
+        {/* Main */}
+        <div className="col-span-12 lg:col-span-9 space-y-5">
           {selectedTable ? (
             <>
-              <GlassPanel className="px-5 py-4">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="font-headline text-on-surface text-xl">
-                    {selectedTable.schema}.{selectedTable.name}
-                  </h2>
-                  {selectedTable.row_count_estimate != null ? (
-                    <span className="text-on-surface-variant text-sm">
-                      ~{selectedTable.row_count_estimate.toLocaleString()} rows
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-headline text-2xl text-on-surface flex items-center gap-2">
+                    {selectedTable.name}
+                    <span className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant border border-outline/25 rounded px-2 py-0.5">
+                      {data.bundle.dialect}
                     </span>
-                  ) : null}
+                  </h2>
+                  <p className="text-on-surface-variant text-sm mt-1">
+                    {selectedTable.row_count_estimate != null &&
+                    selectedTable.row_count_estimate >= 0
+                      ? `~${selectedTable.row_count_estimate.toLocaleString()} rows · `
+                      : ""}
+                    {selectedTable.columns.length} columns
+                  </p>
                 </div>
-                <table className="w-full mt-3 text-sm">
-                  <thead>
-                    <tr className="text-left border-b border-outline/15 text-on-surface-variant uppercase text-xs tracking-wider">
-                      <th className="py-2">Column</th>
-                      <th>Type</th>
-                      <th>Null?</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedTable.columns.map((c) => (
-                      <tr key={c.name} className="border-b border-outline/10">
-                        <td className="py-2 font-mono">{c.name}</td>
-                        <td className="text-on-surface-variant">{c.data_type}</td>
-                        <td className="text-on-surface-variant">
-                          {c.nullable ? "yes" : "no"}
-                        </td>
-                        <td className="text-on-surface-variant space-x-2">
-                          {c.is_pk ? <span className="text-primary">PK</span> : null}
-                          {c.is_id ? <span className="text-secondary">ID</span> : null}
-                          {c.fk_to ? (
-                            <span className="text-tertiary">→ {c.fk_to}</span>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </GlassPanel>
+                <button
+                  onClick={chatWithTable}
+                  className="flex items-center gap-2 rounded-lg bg-primary-container text-on-primary-container px-4 py-2 text-sm font-semibold qm-glow hover:opacity-90 transition"
+                >
+                  <SparkIcon width={16} height={16} /> Chat with this table
+                </button>
+              </div>
 
-              <GlassPanel className="px-5 py-4">
-                <div className="text-xs uppercase tracking-wider text-on-surface-variant pb-2">
-                  Samples
-                </div>
-                <div className="space-y-3">
-                  {Object.entries(samples).map(([col, s]) => (
-                    <div key={col} className="text-sm">
-                      <div className="font-mono text-on-surface">{col}</div>
-                      <div className="text-on-surface-variant ml-3">
-                        {s.distinct_values ? (
-                          <>
-                            distinct:{" "}
-                            <span className="font-mono">
-                              {s.distinct_values.map((v) => JSON.stringify(v)).join(", ")}
-                              {s.distinct_truncated ? ", …" : ""}
-                            </span>
-                          </>
-                        ) : s.numeric_stats ? (
-                          <span className="font-mono">
-                            {Object.entries(s.numeric_stats)
-                              .map(([k, v]) => `${k}=${v}`)
-                              .join(", ")}
-                          </span>
-                        ) : s.sample_rows ? (
-                          <span className="font-mono">
-                            sample: {s.sample_rows.map((v) => JSON.stringify(v)).join(", ")}
-                          </span>
-                        ) : (
-                          <span className="opacity-60">no sample</span>
-                        )}
+              {/* Column cards */}
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {selectedTable.columns.map((c) => {
+                  const s = samples[c.name];
+                  return (
+                    <GlassPanel key={c.name} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-on-surface">{c.name}</span>
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant border border-outline/25 rounded px-1.5 py-0.5 shrink-0">
+                          {c.data_type}
+                        </span>
                       </div>
-                    </div>
-                  ))}
+                      <div className="flex flex-wrap gap-1.5">
+                        {c.is_pk ? <Badge tone="primary">PK</Badge> : null}
+                        {c.is_id && !c.is_pk ? <Badge tone="secondary">ID</Badge> : null}
+                        {c.fk_to ? <Badge tone="tertiary">→ {c.fk_to}</Badge> : null}
+                        {c.nullable ? <Badge tone="muted">nullable</Badge> : null}
+                      </div>
+                      {s ? <SampleLine s={s} /> : null}
+                    </GlassPanel>
+                  );
+                })}
+              </div>
+
+              {/* Semantic insight */}
+              <GlassPanel className="qm-gradient-border p-5">
+                <div className="flex items-center gap-2 font-mono text-label-caps uppercase text-primary-container mb-2">
+                  <SparkIcon width={16} height={16} /> Semantic Insight
                 </div>
+                <p className="text-on-surface-variant text-sm">
+                  {insightFor(selectedTable)}
+                </p>
               </GlassPanel>
             </>
-          ) : null}
+          ) : (
+            <GlassPanel className="px-5 py-8 text-center text-on-surface-variant">
+              Select a table to inspect.
+            </GlassPanel>
+          )}
         </div>
       </div>
-    </PageShell>
+    </Shell>
   );
 }
 
-function PageShell({ children }: { children: React.ReactNode }) {
+function insightFor(t: Table): string {
+  const fks = t.foreign_keys?.length ?? 0;
+  const pk = t.columns.find((c) => c.is_pk)?.name;
+  const parts: string[] = [];
+  parts.push(`QueryMind profiled ${t.columns.length} columns in ${t.name}.`);
+  if (pk) parts.push(`Primary key: ${pk}.`);
+  if (fks > 0)
+    parts.push(
+      `${fks} foreign-key relationship${fks > 1 ? "s" : ""} link this table to others — joins are available to the planner.`,
+    );
+  else parts.push("No foreign keys detected on this table.");
+  return parts.join(" ");
+}
+
+function SampleLine({ s }: { s: Sample }) {
+  let body: string | null = null;
+  if (s.distinct_values?.length) {
+    body =
+      "distinct: " +
+      s.distinct_values.map((v) => JSON.stringify(v)).join(", ") +
+      (s.distinct_truncated ? ", …" : "");
+  } else if (s.numeric_stats) {
+    body = Object.entries(s.numeric_stats)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("  ");
+  } else if (s.sample_rows?.length) {
+    body = "e.g. " + s.sample_rows.map((v) => JSON.stringify(v)).join(", ");
+  }
+  if (!body) return null;
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 space-y-4">
+    <div className="font-mono text-[11px] text-on-surface-variant truncate" title={body}>
+      {body}
+    </div>
+  );
+}
+
+function Badge({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "primary" | "secondary" | "tertiary" | "muted";
+}) {
+  const tones: Record<string, string> = {
+    primary: "text-primary-container border-primary-container/40",
+    secondary: "text-secondary border-secondary/40",
+    tertiary: "text-tertiary border-tertiary/40",
+    muted: "text-on-surface-variant border-outline/30",
+  };
+  return (
+    <span
+      className={
+        "font-mono text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 border " +
+        tones[tone]
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="mx-auto max-w-7xl px-container-margin py-8 space-y-5">
       <header>
         <p className="font-mono text-label-caps uppercase text-on-surface-variant">
           Schema Explorer
