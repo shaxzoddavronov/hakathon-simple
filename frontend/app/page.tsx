@@ -38,8 +38,13 @@ const STATUS_TINT: Record<string, string> = {
   auth_error: "text-error",
 };
 
-// Left accent bar / glow color, cycled per card (cyan → amber → violet).
-const ACCENTS = ["#00d4ff", "#ffb020", "#6001d1"];
+// Left accent + button color, cycled per card (cyan → amber → violet).
+// `text` is the readable foreground for a solid button of color `c`.
+const ACCENTS = [
+  { c: "#00d4ff", text: "#02132d" },
+  { c: "#ffb020", text: "#02132d" },
+  { c: "#6001d1", text: "#ffffff" },
+];
 
 function setActiveWorkspace(id: string, name: string) {
   if (typeof window === "undefined") return;
@@ -93,7 +98,7 @@ export default function WorkspacesPage() {
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {items.map((w, i) => {
-              const accent = ACCENTS[i % ACCENTS.length];
+              const accent = ACCENTS[i % ACCENTS.length]!;
               return (
                 <GlassPanel
                   key={w.id}
@@ -102,12 +107,12 @@ export default function WorkspacesPage() {
                   {/* accent bar */}
                   <span
                     className="absolute left-0 top-0 h-full w-1"
-                    style={{ background: accent, boxShadow: `0 0 12px ${accent}` }}
+                    style={{ background: accent.c, boxShadow: `0 0 12px ${accent.c}` }}
                   />
                   <div className="flex items-start justify-between">
                     <span
                       className="grid h-10 w-10 place-items-center rounded-lg"
-                      style={{ background: `${accent}22`, color: accent }}
+                      style={{ background: `${accent.c}22`, color: accent.c }}
                     >
                       <DatabaseIcon />
                     </span>
@@ -143,8 +148,8 @@ export default function WorkspacesPage() {
                     </Link>
                     <button
                       onClick={() => openChat(w)}
-                      className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-on-primary-container qm-glow transition hover:opacity-90"
-                      style={{ background: accent }}
+                      className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold qm-glow transition hover:opacity-90"
+                      style={{ background: accent.c, color: accent.text }}
                     >
                       Open Chat
                     </button>
