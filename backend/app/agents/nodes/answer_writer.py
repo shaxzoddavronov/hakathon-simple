@@ -23,6 +23,27 @@ def _result_shape(rs: ResultSet | None) -> str:
 
 
 async def run(state: GraphState) -> GraphState:
+    if state.get("no_workspace"):
+        # No database connected — the agent (LLM) explains, not a hardcoded string.
+        llm = agent_llm(state)
+        draft = await llm.structured(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "The user has NOT connected any database to QueryMind yet. "
+                        "In 1-2 friendly sentences, explain that they need to connect "
+                        "a database (a 'workspace') first before you can answer "
+                        "questions about their data, and invite them to do so. Do not "
+                        "invent any data or tables."
+                    ),
+                },
+                {"role": "user", "content": state.get("user_message", "")},
+            ],
+            AnswerDraft,
+        )
+        return {"answer": draft}
+
     rs = state.get("result")
     if rs is None and state.get("intent") in {"chitchat", "metadata"}:
         # No data — produce a short conversational answer.

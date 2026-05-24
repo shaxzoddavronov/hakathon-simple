@@ -21,6 +21,15 @@ async def run(state: GraphState) -> GraphState:
     if not msg:
         return {"intent": "clarify", "error_message": "empty user message"}
 
+    if not state.get("has_workspaces", True):
+        # No database connected at all — route to answer_writer, which
+        # explains (via the LLM) that the user must connect one first.
+        return {
+            "intent": "chitchat",
+            "no_workspace": True,
+            "resolved_workspace_id": None,
+        }
+
     if state.get("force_dashboard"):
         # Dashboard-Diagram mode: the user explicitly asked for a dashboard,
         # so skip LLM classification and route straight to the dashboard path.

@@ -47,20 +47,24 @@ def _sse(event: str, data: dict[str, Any]) -> bytes:
 
 async def _resolve_or_workspace_id(
     session: AsyncSession, user: User, payload: ChatRequest
-) -> UUID | None:
-    """Returns a UUID or None. None means we need user clarification."""
+) -> tuple[UUID | None, bool]:
+    """Returns (workspace_id_or_None, has_any_workspace).
+
+    workspace_id None means we need clarification; has_any_workspace is
+    False only when the user has connected no workspace at all.
+    """
     rows = await session.execute(
         select(Workspace).where(Workspace.owner_id == user.id)
     )
     ws_list = list(rows.scalars().all())
     if not ws_list:
-        return None
+        return None, False
     res = resolve(payload.message, payload.active_workspace_id, ws_list)
     if isinstance(res, Resolved):
-        return res.workspace_id
+        return res.workspace_id, True
     if isinstance(res, (Ambiguous, Conflict, Missing)):
-        return payload.active_workspace_id  # fall back to dropdown if any
-    return None
+        return payload.active_workspace_id, True  # fall back to dropdown if any
+    return None, True
 
 
 async def _ensure_session(
@@ -113,7 +117,9 @@ async def post_chat(
 ) -> StreamingResponse:
     llm_cfg = await get_llm_settings(session, current_user.id)
     await _ensure_llm_ready(llm_cfg)
-    workspace_id = await _resolve_or_workspace_id(session, current_user, payload)
+    workspace_id, has_workspaces = await _resolve_or_workspace_id(
+        session, current_user, payload
+    )
     chat_session = await _ensure_session(
         session, current_user, payload.session_id, workspace_id
     )
@@ -139,6 +145,7 @@ async def post_chat(
             "llm_endpoint": llm_cfg["endpoint"],
             "llm_api_key": llm_cfg["api_key"],
             "llm_model": llm_cfg["model_chat"],
+            "has_workspaces": has_workspaces,
         }
 
         yield _sse(

@@ -26,6 +26,10 @@ class GraphState(TypedDict, total=False):
     llm_api_key: str | None
     llm_model: str | None  # chat model
 
+    # Whether the user has any connected workspace at all.
+    has_workspaces: bool
+    no_workspace: bool  # set by coordinator → answer_writer explains it
+
     # Coordinator outputs
     resolved_workspace_id: UUID | None
     intent: str  # chitchat | metadata | data_query | dashboard | clarify

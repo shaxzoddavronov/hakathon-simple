@@ -219,10 +219,12 @@ class ChatSession(Base):
     id: Mapped[UUID] = mapped_column(
         UUIDType, primary_key=True, server_default=_UUID_DEFAULT
     )
-    workspace_id: Mapped[UUID] = mapped_column(
+    # Nullable: a chat session can exist before any workspace is connected
+    # (the agent answers "connect a database first").
+    workspace_id: Mapped[UUID | None] = mapped_column(
         UUIDType,
         ForeignKey("workspaces.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     user_id: Mapped[UUID] = mapped_column(
         UUIDType,
@@ -234,7 +236,7 @@ class ChatSession(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    workspace: Mapped[Workspace] = relationship(back_populates="chat_sessions")
+    workspace: Mapped[Workspace | None] = relationship(back_populates="chat_sessions")
     user: Mapped[User] = relationship(back_populates="chat_sessions")
     messages: Mapped[list["Message"]] = relationship(
         back_populates="session",
