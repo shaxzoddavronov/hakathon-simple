@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from app.agents.state import GraphState
@@ -17,8 +18,6 @@ async def run(state: GraphState) -> GraphState:
     if plan is None or validation is None or not validation.ok or workspace_id is None:
         return {"last_executor_error": "executor invoked without a valid plan"}
 
-    sql_to_run = validation.rewritten_sql or plan.sql
-
     try:
         engine = await build_engine_for_workspace(workspace_id)
     except Exception as exc:
@@ -26,7 +25,13 @@ async def run(state: GraphState) -> GraphState:
         return {"executor_attempts": attempts, "last_executor_error": str(exc)}
 
     try:
-        rs = await engine.execute(sql_to_run)
+        if state.get("query_kind") == "mongo_agg":
+            pipeline = json.loads(plan.pipeline_json)
+            rs = await engine.run_pipeline(plan.collection, pipeline)
+            executed = f"db.{plan.collection}.aggregate({plan.pipeline_json})"
+        else:
+            executed = validation.rewritten_sql or plan.sql
+            rs = await engine.execute(executed)
     except Exception as exc:
         log.exception("execute failed")
         return {"executor_attempts": attempts, "last_executor_error": str(exc)}
@@ -35,7 +40,7 @@ async def run(state: GraphState) -> GraphState:
 
     return {
         "result": rs,
-        "sql_executed": sql_to_run,
+        "sql_executed": executed,
         "executor_attempts": attempts,
         "last_executor_error": None,
     }

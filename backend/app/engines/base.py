@@ -4,7 +4,9 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Dialect = Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
+Dialect = Literal[
+    "postgres", "sqlite", "clickhouse", "oracle", "elasticsearch", "mongodb"
+]
 
 # Which query language family an engine speaks. The agent (planner/validator/
 # executor) routes on this so non-SQL backends (es_dsl, mongo_agg) can plug in

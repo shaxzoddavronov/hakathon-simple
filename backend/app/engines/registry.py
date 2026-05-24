@@ -16,6 +16,8 @@ QUERY_KIND: dict[Dialect, QueryKind] = {
     "oracle": "sql",
     # ES uses its read-only _sql API, so the agent still emits SQL.
     "elasticsearch": "sql",
+    # MongoDB: the agent emits an aggregation pipeline, not SQL.
+    "mongodb": "mongo_agg",
 }
 
 

@@ -15,6 +15,7 @@ from app.engines.base import (
     SchemaBundle,
     TableMeta,
 )
+from app.engines.registry import query_kind_for
 from app.services.schema_pruner import prune
 
 
@@ -43,7 +44,12 @@ async def run(state: GraphState) -> GraphState:
         }
 
     bundle = _deserialize(bundle_row.bundle)
-    out: GraphState = {"schema_bundle": bundle}
+    qk = query_kind_for(bundle.dialect)
+    out: GraphState = {"schema_bundle": bundle, "query_kind": qk}
+
+    # Dashboards are SQL-only for now; non-SQL backends answer as a single query.
+    if qk != "sql" and state.get("intent") == "dashboard":
+        out["intent"] = "data_query"
 
     # Skip pruning for metadata intent (the answer writer wants the whole bundle).
     if state.get("intent") in {"data_query", "dashboard"}:

@@ -19,6 +19,7 @@ class SqlPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     dialect: Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
+    # (mongodb uses MongoAggPlan, not SqlPlan)
     sql: str = Field(
         description="A single read-only SELECT. Validator will reject DML/DDL."
     )
@@ -74,6 +75,25 @@ class DashboardPlan(BaseModel):
     panels: list[DashboardPanel] = Field(
         description="2-6 complementary panels that together answer the question."
     )
+
+
+class MongoAggPlan(BaseModel):
+    """Plan for the MongoDB (non-SQL) backend. The model emits an aggregation
+    pipeline as a JSON-array string in `pipeline_json` (easier + safer for
+    guided decoding than a deeply-nested object); it's parsed and read-only-
+    validated before execution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    collection: str = Field(description="Target collection name.")
+    pipeline_json: str = Field(
+        description=(
+            "A MongoDB aggregation pipeline as a JSON array string, e.g. "
+            '\'[{"$group":{"_id":"$region","total":{"$sum":"$amount"}}}]\'. '
+            "Read-only only: no $out, $merge, $function, $where."
+        )
+    )
+    rationale: str = Field(description="One sentence: why this answers the question.")
 
 
 class TableNote(BaseModel):

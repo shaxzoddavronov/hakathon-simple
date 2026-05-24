@@ -4,7 +4,7 @@ from typing import Annotated, Any, TypedDict
 from uuid import UUID
 
 from app.engines.base import ResultSet, SchemaBundle, ValidationResult
-from app.schemas.llm_io import AnswerDraft, SqlPlan
+from app.schemas.llm_io import AnswerDraft, MongoAggPlan, SqlPlan
 from app.schemas.ui_spec import UISpec
 
 
@@ -38,9 +38,10 @@ class GraphState(TypedDict, total=False):
     # Schema loader / pruner
     schema_bundle: SchemaBundle | None
     pruned_table_qnames: list[str]
+    query_kind: str  # "sql" | "mongo_agg" — set from the workspace dialect
 
     # Planner / validator / executor
-    plan: SqlPlan | None
+    plan: SqlPlan | MongoAggPlan | None
     validation: ValidationResult | None
     result: ResultSet | None
     sql_executed: str | None

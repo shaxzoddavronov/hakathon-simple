@@ -8,7 +8,13 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { DatabaseIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
-type Dialect = "postgres" | "sqlite" | "clickhouse" | "oracle" | "elasticsearch";
+type Dialect =
+  | "postgres"
+  | "sqlite"
+  | "clickhouse"
+  | "oracle"
+  | "elasticsearch"
+  | "mongodb";
 
 const GRANT_RECIPE: Record<Dialect, string> = {
   postgres: `-- Run as a superuser in the database you want to expose
@@ -36,6 +42,12 @@ PUT _security/role/querymind_ro
 PUT _security/user/querymind_ro
 { "password": "replace-me", "roles": ["querymind_ro"] }
 # QueryMind queries only the read-only _sql API.`,
+  mongodb: `// Create a read-only MongoDB user (run in mongosh as an admin)
+db.getSiblingDB("admin").createUser({
+  user: "querymind_ro", pwd: "replace-me",
+  roles: [{ role: "read", db: "your_db" }]
+})
+// QueryMind only ever calls aggregate() (read-only).`,
 };
 
 const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
@@ -43,6 +55,7 @@ const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
   { id: "clickhouse", label: "ClickHouse", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "oracle", label: "Oracle", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "elasticsearch", label: "Elasticsearch", icon: <DatabaseIcon width={28} height={28} /> },
+  { id: "mongodb", label: "MongoDB", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "sqlite", label: "SQLite", icon: <TableIcon width={28} height={28} /> },
 ];
 
@@ -52,6 +65,7 @@ const DEFAULT_PORT: Record<string, string> = {
   clickhouse: "8123",
   oracle: "1521",
   elasticsearch: "9200",
+  mongodb: "27017",
 };
 
 export default function NewWorkspacePage() {
@@ -163,7 +177,7 @@ export default function NewWorkspacePage() {
           {/* Architecture selector */}
           <div>
             <p className="text-on-surface mb-3">Select primary data architecture</p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {ARCHS.map((a) => {
                 const active = dialect === a.id;
                 return (
@@ -245,9 +259,7 @@ export default function NewWorkspacePage() {
                 "rounded-lg px-4 py-3 text-sm border " +
                 (!probe.reachable
                   ? "border-error/40 bg-error-container/20 text-error"
-                  : probe.can_write
-                    ? "border-[#ffb020]/40 bg-[#ffb020]/10 text-[#ffb020]"
-                    : "border-tertiary/40 bg-tertiary/10 text-tertiary")
+                  : "border-tertiary/40 bg-tertiary/10 text-tertiary")
               }
             >
               {probe.message}

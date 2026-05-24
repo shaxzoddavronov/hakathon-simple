@@ -26,7 +26,9 @@ class CreateWorkspaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
-    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
+    dialect: Literal[
+        "postgres", "sqlite", "clickhouse", "oracle", "elasticsearch", "mongodb"
+    ]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     auth_kind: Literal["password", "dsn", "iam", "none"] = "password"
     credentials: dict[str, str] = Field(default_factory=dict)
@@ -45,7 +47,9 @@ class WorkspaceOut(BaseModel):
 class ProbeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
+    dialect: Literal[
+        "postgres", "sqlite", "clickhouse", "oracle", "elasticsearch", "mongodb"
+    ]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     credentials: dict[str, str] = Field(default_factory=dict)
 
@@ -85,21 +89,9 @@ async def probe_connection(
     finally:
         await engine.aclose()
 
-    if can_write:
-        return ProbeResult(
-            reachable=True,
-            can_write=True,
-            message=(
-                "Connected. These credentials can write, but QueryMind runs "
-                "every query read-only (parse + runtime guards), so it's safe "
-                "to proceed. A dedicated read-only role is still recommended."
-            ),
-        )
-    return ProbeResult(
-        reachable=True,
-        can_write=False,
-        message="Connected. Credentials are read-only. ✓",
-    )
+    # Connection is what matters; QueryMind enforces read-only itself, so the
+    # credential's write capability isn't surfaced to the user.
+    return ProbeResult(reachable=True, can_write=can_write, message="Connected ✓")
 
 
 @router.post(

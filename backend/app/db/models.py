@@ -131,7 +131,7 @@ class Workspace(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "dialect IN ('postgres','sqlite')",
+            "dialect IN ('postgres','sqlite','clickhouse','oracle','elasticsearch','mongodb')",
             name="ck_workspaces_dialect",
         ),
         CheckConstraint(
@@ -316,7 +316,7 @@ class QueryHistory(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "dialect IN ('postgres','sqlite')",
+            "dialect IN ('postgres','sqlite','clickhouse','oracle','elasticsearch','mongodb')",
             name="ck_query_history_dialect",
         ),
         CheckConstraint(

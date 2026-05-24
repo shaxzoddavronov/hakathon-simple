@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.agents.llm import agent_llm
 from app.agents.state import GraphState
 from app.engines.base import SchemaBundle
-from app.schemas.llm_io import SqlPlan
+from app.schemas.llm_io import MongoAggPlan, SqlPlan
 
 _SYSTEM = (
     "You are a SQL planner for a strict READ-ONLY analytics tool. "
@@ -12,6 +12,16 @@ _SYSTEM = (
     "Rules: SELECT only, no DML/DDL, no system tables, no functions like "
     "pg_sleep or load_file. Reference only columns that exist. "
     "Prefer concise queries; do not include comments."
+)
+
+_MONGO_SYSTEM = (
+    "You are a MongoDB aggregation planner for a strict READ-ONLY analytics "
+    "tool. Given the collections and their fields, produce ONE aggregation "
+    "pipeline that answers the question. Set `collection` to the target "
+    "collection and `pipeline_json` to the pipeline as a JSON array string "
+    '(e.g. \'[{"$group":{"_id":"$region","total":{"$sum":"$amount"}}}]\'). '
+    "Read-only: never use $out, $merge, $function, $accumulator, or $where. "
+    "Reference only fields that exist; prefer $match/$group/$project/$sort/$limit."
 )
 
 
@@ -59,21 +69,37 @@ async def run(state: GraphState) -> GraphState:
     if state.get("last_executor_error"):
         feedback.append(f"Previous attempt failed at execution: {state['last_executor_error']}")
 
-    prompt_user = (
-        f"Question: {state.get('user_message','')}\n\n"
-        f"Schema:\n{_schema_brief(bundle, keep)}\n\n"
-        + ("\n".join(feedback) + "\n\n" if feedback else "")
-        + "Return a SqlPlan."
-    )
-
+    fb = ("\n".join(feedback) + "\n\n") if feedback else ""
     llm = agent_llm(state)
-    plan = await llm.structured(
-        [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": prompt_user},
-        ],
-        SqlPlan,
-    )
+
+    if state.get("query_kind") == "mongo_agg":
+        prompt_user = (
+            f"Question: {state.get('user_message','')}\n\n"
+            f"Collections (fields):\n{_schema_brief(bundle, keep)}\n\n"
+            + fb
+            + "Return a MongoAggPlan."
+        )
+        plan = await llm.structured(
+            [
+                {"role": "system", "content": _MONGO_SYSTEM},
+                {"role": "user", "content": prompt_user},
+            ],
+            MongoAggPlan,
+        )
+    else:
+        prompt_user = (
+            f"Question: {state.get('user_message','')}\n\n"
+            f"Schema:\n{_schema_brief(bundle, keep)}\n\n"
+            + fb
+            + "Return a SqlPlan."
+        )
+        plan = await llm.structured(
+            [
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": prompt_user},
+            ],
+            SqlPlan,
+        )
     return {
         "plan": plan,
         "planner_attempts": attempts,
