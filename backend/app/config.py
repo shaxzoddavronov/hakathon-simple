@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # --- Local LLM (vLLM, OpenAI-compatible) ------------------------------------
     VLLM_ENDPOINT: str = Field(default="http://localhost:8000/v1")
     VLLM_MODEL: str = Field(default="Qwen/Qwen2.5-0.5B-Instruct")
+    # API key for the model endpoint. A local vLLM ignores it; a shared/admin
+    # endpoint authenticates with it. Empty -> sent as "not-needed" for local dev.
+    VLLM_API_KEY: str = Field(default="")
 
 
 @lru_cache(maxsize=1)

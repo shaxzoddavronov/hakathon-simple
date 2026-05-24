@@ -24,11 +24,16 @@ class LLMClient:
         self,
         endpoint: str | None = None,
         model: str | None = None,
-        api_key: str = "not-needed",
+        api_key: str | None = None,
     ) -> None:
         self._endpoint = endpoint or settings.VLLM_ENDPOINT
         self._model = model or settings.VLLM_MODEL
-        self._client = AsyncOpenAI(base_url=self._endpoint, api_key=api_key)
+        # A local vLLM ignores the key; a shared/admin endpoint authenticates
+        # with it. Fall back to settings, then to a dummy for local dev.
+        self._client = AsyncOpenAI(
+            base_url=self._endpoint,
+            api_key=api_key or settings.VLLM_API_KEY or "not-needed",
+        )
         self._ready_cache: tuple[float, bool] | None = None  # (checked_at, ok)
 
     @property
