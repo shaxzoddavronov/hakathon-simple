@@ -88,34 +88,46 @@ class LLMClient:
         temperature: float = 0.1,
         max_tokens: int = 1024,
     ) -> T:
-        """Call the model and parse the response into ``response_model``."""
-        schema = response_model.model_json_schema()
-        completion = await self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_model.__name__,
-                    "schema": schema,
-                    "strict": True,
-                },
+        """Call the model and parse the response into ``response_model``.
+
+        Reasoning models occasionally return an empty body (all reasoning, no
+        JSON). We disable thinking and retry up to 3 times — nudging the
+        temperature each attempt to escape a degenerate empty sample —
+        before giving up.
+        """
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_model.__name__,
+                "schema": response_model.model_json_schema(),
+                "strict": True,
             },
-            temperature=temperature,
-            max_tokens=max_tokens,
-            # Reasoning ("thinking") models would otherwise spend the token
-            # budget on a <think> block and sometimes return no JSON. We want
-            # the structured answer, not reasoning. Ignored by non-thinking
-            # templates, so it's safe across models.
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-        )
-        text = completion.choices[0].message.content or ""
-        payload = _extract_json(text)
-        if not payload.strip():
-            raise ValueError(
-                f"LLM returned an empty response for {response_model.__name__}"
+        }
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            completion = await self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                response_format=response_format,
+                temperature=temperature + 0.15 * attempt,
+                max_tokens=max_tokens,
+                # We want the structured answer, not reasoning. Ignored by
+                # non-thinking templates, so it's safe across models.
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
-        return response_model.model_validate_json(payload)
+            payload = _extract_json(completion.choices[0].message.content or "")
+            if payload.strip():
+                try:
+                    return response_model.model_validate_json(payload)
+                except Exception as e:  # malformed JSON — retry
+                    last_exc = e
+            else:
+                last_exc = ValueError(
+                    f"empty response for {response_model.__name__}"
+                )
+        raise last_exc or RuntimeError(
+            f"structured() failed for {response_model.__name__}"
+        )
 
 
 _default_client: LLMClient | None = None
