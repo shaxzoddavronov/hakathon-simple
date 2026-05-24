@@ -1,0 +1,128 @@
+# QueryMind AI — production-ish full-stack compose.
+#
+# Containerizes the whole app: Postgres + Redis + API + Celery worker + frontend.
+# The model server (vLLM) is intentionally NOT here — point VLLM_ENDPOINT at a
+# host-run vLLM (http://host.docker.internal:8000/v1) or your admin's shared
+# endpoint, and set VLLM_API_KEY if it needs a token.
+#
+# Usage (from repo root):
+#   cp .env.prod.example .env        # fill in QM_MASTER_KEY, JWT_SECRET, VLLM_*
+#   docker compose -f infra/docker-compose.prod.yml up -d --build
+#
+# Build args/contexts are relative to this file (infra/), hence ../backend etc.
+
+# Shared backend environment (API, worker, migrate all use the same config).
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-querymind}:${POSTGRES_PASSWORD:-querymind}@postgres:5432/${POSTGRES_DB:-querymind}
+  REDIS_URL: redis://redis:6379/0
+  QM_MASTER_KEY: ${QM_MASTER_KEY:?set QM_MASTER_KEY (base64/url-safe 32-byte key)}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://host.docker.internal:8000/v1}
+  VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
+  VLLM_API_KEY: ${VLLM_API_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qm_prod_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-querymind}
+      POSTGRES_USER: ${POSTGRES_USER:-querymind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-querymind}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # pgcrypto (gen_random_uuid) must exist before migrations run.
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-querymind} -d ${POSTGRES_DB:-querymind}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [qm_prod]
+
+  redis:
+    image: redis:7-alpine
+    container_name: qm_prod_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [qm_prod]
+
+  # One-shot: run Alembic migrations, then exit. API/worker wait for it.
+  migrate:
+    build:
+      context: ../backend
+    image: querymind-backend
+    container_name: qm_prod_migrate
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [qm_prod]
+
+  api:
+    build:
+      context: ../backend
+    image: querymind-backend
+    container_name: qm_prod_api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    environment: *backend-env
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach a host-run vLLM on Linux
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks: [qm_prod]
+
+  worker:
+    build:
+      context: ../backend
+    image: querymind-backend
+    container_name: qm_prod_worker
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-l", "info"]
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [qm_prod]
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        # Baked into the client bundle at build time — must be the URL the
+        # BROWSER uses to reach the API (the host-published API port).
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    image: querymind-frontend
+    container_name: qm_prod_frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [qm_prod]
+
+networks:
+  qm_prod:
+    driver: bridge
+
+volumes:
+  pgdata:

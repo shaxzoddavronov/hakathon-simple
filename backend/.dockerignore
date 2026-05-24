@@ -1,0 +1,17 @@
+# Keep the build context small and free of host-only artifacts.
+.venv/
+.venv-vllm/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.db
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore
