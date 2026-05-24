@@ -20,6 +20,8 @@ x-backend-env: &backend-env
   VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://host.docker.internal:8000/v1}
   VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
   VLLM_API_KEY: ${VLLM_API_KEY:-}
+  # Browser origin allowed to call the API (the frontend's URL).
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
 
 services:
   postgres:

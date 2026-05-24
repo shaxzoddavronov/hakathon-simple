@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # endpoint authenticates with it. Empty -> sent as "not-needed" for local dev.
     VLLM_API_KEY: str = Field(default="")
 
+    # --- CORS -------------------------------------------------------------------
+    # Comma-separated browser origins allowed to call the API. For a server-IP
+    # deploy set e.g. "http://192.168.1.10:3000". Defaults to the local dev UI.
+    CORS_ORIGINS: str = Field(default="http://localhost:3000")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

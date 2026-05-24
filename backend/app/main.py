@@ -77,10 +77,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # The frontend dev server runs on :3000 (Next.js default).
+    # Allowed browser origins come from CORS_ORIGINS (comma-separated) so a
+    # server-IP deploy can add e.g. http://<server-ip>:3000.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=[
+            o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
