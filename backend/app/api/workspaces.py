@@ -26,7 +26,7 @@ class CreateWorkspaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
-    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle"]
+    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     auth_kind: Literal["password", "dsn", "iam", "none"] = "password"
     credentials: dict[str, str] = Field(default_factory=dict)
@@ -45,7 +45,7 @@ class WorkspaceOut(BaseModel):
 class ProbeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle"]
+    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle", "elasticsearch"]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     credentials: dict[str, str] = Field(default_factory=dict)
 
@@ -90,8 +90,9 @@ async def probe_connection(
             reachable=True,
             can_write=True,
             message=(
-                "Connected, but these credentials can WRITE to the database. "
-                "We strongly recommend a read-only role."
+                "Connected. These credentials can write, but QueryMind runs "
+                "every query read-only (parse + runtime guards), so it's safe "
+                "to proceed. A dedicated read-only role is still recommended."
             ),
         )
     return ProbeResult(

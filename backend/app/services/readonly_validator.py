@@ -64,8 +64,14 @@ _DANGEROUS_FUNCS = {
 
 _DEFAULT_ROW_CAP = 1000
 
+# App dialect -> sqlglot dialect, for backends sqlglot doesn't model natively.
+# Elasticsearch SQL is a SELECT-only subset with double-quoted identifiers, so
+# parse it leniently as postgres for the read-only AST checks.
+_SQLGLOT_DIALECT = {"elasticsearch": "postgres"}
+
 
 def validate_readonly(sql: str, dialect: str = "postgres") -> ValidationResult:
+    dialect = _SQLGLOT_DIALECT.get(dialect, dialect)
     findings: list[ValidationFinding] = []
 
     try:

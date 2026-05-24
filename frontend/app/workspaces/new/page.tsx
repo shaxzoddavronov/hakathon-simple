@@ -8,7 +8,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { DatabaseIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
-type Dialect = "postgres" | "sqlite" | "clickhouse" | "oracle";
+type Dialect = "postgres" | "sqlite" | "clickhouse" | "oracle" | "elasticsearch";
 
 const GRANT_RECIPE: Record<Dialect, string> = {
   postgres: `-- Run as a superuser in the database you want to expose
@@ -30,20 +30,28 @@ CREATE USER querymind_ro IDENTIFIED BY "replace-me";
 GRANT CREATE SESSION TO querymind_ro;
 GRANT SELECT ON your_schema.your_table TO querymind_ro;  -- per table
 -- QueryMind also runs every query as SET TRANSACTION READ ONLY.`,
+  elasticsearch: `# Read-only Elasticsearch role + user (run via Kibana / API)
+PUT _security/role/querymind_ro
+{ "indices": [{ "names": ["*"], "privileges": ["read", "view_index_metadata"] }] }
+PUT _security/user/querymind_ro
+{ "password": "replace-me", "roles": ["querymind_ro"] }
+# QueryMind queries only the read-only _sql API.`,
 };
 
 const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
   { id: "postgres", label: "PostgreSQL", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "clickhouse", label: "ClickHouse", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "oracle", label: "Oracle", icon: <DatabaseIcon width={28} height={28} /> },
+  { id: "elasticsearch", label: "Elasticsearch", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "sqlite", label: "SQLite", icon: <TableIcon width={28} height={28} /> },
 ];
 
-// Default port per SQL dialect.
+// Default port per dialect.
 const DEFAULT_PORT: Record<string, string> = {
   postgres: "5432",
   clickhouse: "8123",
   oracle: "1521",
+  elasticsearch: "9200",
 };
 
 export default function NewWorkspacePage() {
@@ -155,7 +163,7 @@ export default function NewWorkspacePage() {
           {/* Architecture selector */}
           <div>
             <p className="text-on-surface mb-3">Select primary data architecture</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {ARCHS.map((a) => {
                 const active = dialect === a.id;
                 return (
@@ -195,8 +203,13 @@ export default function NewWorkspacePage() {
                   <Field label="Port">
                     <input required type="number" value={port} onChange={(e) => setPort(e.target.value)} className="qm-underline w-full" />
                   </Field>
-                  <Field label="Database">
-                    <input required value={dbName} onChange={(e) => setDbName(e.target.value)} className="qm-underline w-full" />
+                  <Field label={dialect === "elasticsearch" ? "Database (n/a)" : "Database"}>
+                    <input
+                      required={dialect !== "elasticsearch"}
+                      value={dbName}
+                      onChange={(e) => setDbName(e.target.value)}
+                      className="qm-underline w-full"
+                    />
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-5">
@@ -230,9 +243,11 @@ export default function NewWorkspacePage() {
             <div
               className={
                 "rounded-lg px-4 py-3 text-sm border " +
-                (!probe.reachable || probe.can_write
+                (!probe.reachable
                   ? "border-error/40 bg-error-container/20 text-error"
-                  : "border-tertiary/40 bg-tertiary/10 text-tertiary")
+                  : probe.can_write
+                    ? "border-[#ffb020]/40 bg-[#ffb020]/10 text-[#ffb020]"
+                    : "border-tertiary/40 bg-tertiary/10 text-tertiary")
               }
             >
               {probe.message}

@@ -14,6 +14,8 @@ QUERY_KIND: dict[Dialect, QueryKind] = {
     "sqlite": "sql",
     "clickhouse": "sql",
     "oracle": "sql",
+    # ES uses its read-only _sql API, so the agent still emits SQL.
+    "elasticsearch": "sql",
 }
 
 
