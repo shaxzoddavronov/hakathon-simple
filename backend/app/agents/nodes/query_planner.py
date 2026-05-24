@@ -14,6 +14,19 @@ _SYSTEM = (
     "Prefer concise queries; do not include comments."
 )
 
+_ES_SYSTEM = (
+    "You are an Elasticsearch SQL planner for a strict READ-ONLY analytics "
+    "tool. Generate ONE Elasticsearch SQL SELECT against the indices (shown as "
+    "tables) below. Elasticsearch SQL rules:\n"
+    "- SELECT explicit columns, NEVER SELECT * (it fails on array/text fields).\n"
+    "- No JOINs — Elasticsearch SQL cannot join indices; query a single index.\n"
+    "- GROUP BY / ORDER BY work on keyword and numeric fields.\n"
+    "- Use COUNT/SUM/AVG/MIN/MAX for aggregates; for full-text search use "
+    "MATCH(field, 'terms'), not LIKE.\n"
+    "- Add a LIMIT. Reference only fields that exist; double-quote index names "
+    "with spaces."
+)
+
 _MONGO_SYSTEM = (
     "You are a MongoDB aggregation planner for a strict READ-ONLY analytics "
     "tool. Given the collections and their fields, produce ONE aggregation "
@@ -87,6 +100,8 @@ async def run(state: GraphState) -> GraphState:
             MongoAggPlan,
         )
     else:
+        dialect = bundle.dialect if bundle else "postgres"
+        system = _ES_SYSTEM if dialect == "elasticsearch" else _SYSTEM
         prompt_user = (
             f"Question: {state.get('user_message','')}\n\n"
             f"Schema:\n{_schema_brief(bundle, keep)}\n\n"
@@ -95,7 +110,7 @@ async def run(state: GraphState) -> GraphState:
         )
         plan = await llm.structured(
             [
-                {"role": "system", "content": _SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": prompt_user},
             ],
             SqlPlan,
