@@ -35,6 +35,9 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     session_id: UUID | None = None
     active_workspace_id: UUID | None = None
+    # When true (Dashboard-Diagram mode), the coordinator forces the
+    # dashboard intent instead of classifying it from the message.
+    force_dashboard: bool = False
 
 
 def _sse(event: str, data: dict[str, Any]) -> bytes:
@@ -127,6 +130,7 @@ async def post_chat(
             "user_message": payload.message,
             "active_workspace_id": payload.active_workspace_id,
             "resolved_workspace_id": workspace_id,
+            "force_dashboard": payload.force_dashboard,
         }
 
         yield _sse(

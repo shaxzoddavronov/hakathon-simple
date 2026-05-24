@@ -83,6 +83,7 @@ export async function streamChat(
     message: string;
     session_id?: string | null;
     active_workspace_id?: string | null;
+    force_dashboard?: boolean;
   },
   onEvent: (evt: SseEvent) => void,
 ): Promise<void> {

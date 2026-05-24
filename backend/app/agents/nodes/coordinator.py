@@ -21,18 +21,23 @@ async def run(state: GraphState) -> GraphState:
     if not msg:
         return {"intent": "clarify", "error_message": "empty user message"}
 
-    llm = get_llm()
-    decision = await llm.structured(
-        [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": msg},
-        ],
-        IntentDecision,
-    )
-    out: GraphState = {
-        "intent": decision.intent,
-        "workspace_hint": decision.workspace_hint,
-    }
+    if state.get("force_dashboard"):
+        # Dashboard-Diagram mode: the user explicitly asked for a dashboard,
+        # so skip LLM classification and route straight to the dashboard path.
+        out: GraphState = {"intent": "dashboard", "workspace_hint": None}
+    else:
+        llm = get_llm()
+        decision = await llm.structured(
+            [
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": msg},
+            ],
+            IntentDecision,
+        )
+        out = {
+            "intent": decision.intent,
+            "workspace_hint": decision.workspace_hint,
+        }
     # Default resolved_workspace_id to whatever the dropdown picked. The
     # workspace_resolver is wired in by the API layer before invoking the
     # graph; here we just carry whatever's already in state.

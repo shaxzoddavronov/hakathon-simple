@@ -19,6 +19,7 @@ class GraphState(TypedDict, total=False):
     session_id: UUID
     user_message: str
     active_workspace_id: UUID | None  # dropdown selection
+    force_dashboard: bool  # Dashboard-Diagram mode — force the dashboard intent
 
     # Coordinator outputs
     resolved_workspace_id: UUID | None
