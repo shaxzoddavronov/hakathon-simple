@@ -13,6 +13,8 @@ sqlalchemy[asyncio]>=2.0
 asyncpg
 aiosqlite
 alembic
+# Data-source engine drivers (user-connected DBs)
+clickhouse-connect[async]
 
 # Config / validation
 pydantic>=2

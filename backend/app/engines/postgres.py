@@ -11,6 +11,7 @@ from app.engines.base import (
     ColumnSample,
     Dialect,
     ForeignKeyMeta,
+    QueryKind,
     ResultSet,
     SchemaBundle,
     TableMeta,
@@ -26,6 +27,7 @@ _SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
 @register("postgres")
 class PostgresEngine:
     dialect: Dialect = "postgres"
+    query_kind: QueryKind = "sql"
 
     def __init__(self, workspace) -> None:
         meta = dict(workspace.connection_meta or {})

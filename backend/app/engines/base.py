@@ -4,7 +4,12 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Dialect = Literal["postgres", "sqlite"]
+Dialect = Literal["postgres", "sqlite", "clickhouse"]
+
+# Which query language family an engine speaks. The agent (planner/validator/
+# executor) routes on this so non-SQL backends (es_dsl, mongo_agg) can plug in
+# later without changing the SQL ones. SQL covers postgres/sqlite/clickhouse.
+QueryKind = Literal["sql", "es_dsl", "mongo_agg"]
 
 
 class ColumnMeta(BaseModel):
@@ -85,6 +90,7 @@ class ValidationResult(BaseModel):
 @runtime_checkable
 class QueryEngine(Protocol):
     dialect: Dialect
+    query_kind: QueryKind  # "sql" for the SQL family
 
     async def introspect_schema(self) -> SchemaBundle: ...
 

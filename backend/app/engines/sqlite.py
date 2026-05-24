@@ -11,6 +11,7 @@ from app.engines.base import (
     ColumnSample,
     Dialect,
     ForeignKeyMeta,
+    QueryKind,
     ResultSet,
     SchemaBundle,
     TableMeta,
@@ -23,6 +24,7 @@ from app.services.readonly_validator import validate_readonly
 @register("sqlite")
 class SqliteEngine:
     dialect: Dialect = "sqlite"
+    query_kind: QueryKind = "sql"
 
     def __init__(self, workspace) -> None:
         meta = dict(workspace.connection_meta or {})

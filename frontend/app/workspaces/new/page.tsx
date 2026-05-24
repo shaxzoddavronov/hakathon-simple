@@ -8,7 +8,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { DatabaseIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
-type Dialect = "postgres" | "sqlite";
+type Dialect = "postgres" | "sqlite" | "clickhouse";
 
 const GRANT_RECIPE: Record<Dialect, string> = {
   postgres: `-- Run as a superuser in the database you want to expose
@@ -21,12 +21,23 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
   sqlite: `# QueryMind opens SQLite with mode=ro automatically.
 # Make sure the file is readable by the backend process,
 # and that no other process has it open for write at demo time.`,
+  clickhouse: `-- Create a read-only ClickHouse user (run as an admin)
+CREATE USER querymind_ro IDENTIFIED BY 'replace-me' SETTINGS readonly = 2;
+GRANT SELECT ON your_db.* TO querymind_ro;
+-- QueryMind also enforces readonly=2 on every query at runtime.`,
 };
 
 const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
   { id: "postgres", label: "PostgreSQL", icon: <DatabaseIcon width={28} height={28} /> },
+  { id: "clickhouse", label: "ClickHouse", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "sqlite", label: "SQLite", icon: <TableIcon width={28} height={28} /> },
 ];
+
+// Default port per SQL dialect.
+const DEFAULT_PORT: Record<string, string> = {
+  postgres: "5432",
+  clickhouse: "8123",
+};
 
 export default function NewWorkspacePage() {
   const router = useRouter();
@@ -54,10 +65,10 @@ export default function NewWorkspacePage() {
 
   function buildConn() {
     const connection_meta =
-      dialect === "postgres"
-        ? { host, port: Number(port), db_name: dbName, ssl }
-        : { path };
-    const credentials = dialect === "postgres" ? { user, password } : {};
+      dialect === "sqlite"
+        ? { path }
+        : { host, port: Number(port), db_name: dbName, ssl };
+    const credentials = dialect === "sqlite" ? {} : { user, password };
     return { connection_meta, credentials };
   }
 
@@ -89,7 +100,7 @@ export default function NewWorkspacePage() {
     setBusy(true);
     try {
       const { connection_meta, credentials } = buildConn();
-      const auth_kind = dialect === "postgres" ? "password" : "none";
+      const auth_kind = dialect === "sqlite" ? "none" : "password";
       await api("/workspaces", {
         method: "POST",
         body: JSON.stringify({ name, dialect, connection_meta, credentials, auth_kind }),
@@ -137,14 +148,17 @@ export default function NewWorkspacePage() {
           {/* Architecture selector */}
           <div>
             <p className="text-on-surface mb-3">Select primary data architecture</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {ARCHS.map((a) => {
                 const active = dialect === a.id;
                 return (
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => setDialect(a.id)}
+                    onClick={() => {
+                      setDialect(a.id);
+                      if (DEFAULT_PORT[a.id]) setPort(DEFAULT_PORT[a.id]!);
+                    }}
                     className={
                       "rounded-lg border p-6 flex flex-col items-center gap-3 transition " +
                       (active
@@ -165,7 +179,7 @@ export default function NewWorkspacePage() {
             <p className="font-mono text-label-caps uppercase text-on-surface-variant">
               Connection
             </p>
-            {dialect === "postgres" ? (
+            {dialect !== "sqlite" ? (
               <>
                 <Field label="Host">
                   <input required value={host} onChange={(e) => setHost(e.target.value)} className="qm-underline w-full" />

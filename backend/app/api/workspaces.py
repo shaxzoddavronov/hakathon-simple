@@ -26,7 +26,7 @@ class CreateWorkspaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
-    dialect: Literal["postgres", "sqlite"]
+    dialect: Literal["postgres", "sqlite", "clickhouse"]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     auth_kind: Literal["password", "dsn", "iam", "none"] = "password"
     credentials: dict[str, str] = Field(default_factory=dict)
@@ -45,7 +45,7 @@ class WorkspaceOut(BaseModel):
 class ProbeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    dialect: Literal["postgres", "sqlite"]
+    dialect: Literal["postgres", "sqlite", "clickhouse"]
     connection_meta: dict[str, Any] = Field(default_factory=dict)
     credentials: dict[str, str] = Field(default_factory=dict)
 

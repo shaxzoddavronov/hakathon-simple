@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from typing import Type
 
-from app.engines.base import Dialect, QueryEngine
+from app.engines.base import Dialect, QueryEngine, QueryKind
 
 DIALECT_REGISTRY: dict[Dialect, Type[QueryEngine]] = {}
+
+# Query-language family per dialect. The agent routes planning/validation on
+# this so non-SQL backends (es_dsl, mongo_agg) plug in without touching the
+# SQL ones. Keep in sync with each engine's `query_kind`.
+QUERY_KIND: dict[Dialect, QueryKind] = {
+    "postgres": "sql",
+    "sqlite": "sql",
+    "clickhouse": "sql",
+}
+
+
+def query_kind_for(dialect: Dialect) -> QueryKind:
+    return QUERY_KIND.get(dialect, "sql")
 
 
 def register(dialect: Dialect):
