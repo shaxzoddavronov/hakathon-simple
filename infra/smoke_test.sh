@@ -14,7 +14,8 @@
 set -euo pipefail
 
 API="${API:-http://localhost:8080}"
-EMAIL="${EMAIL:-smoke+$(date +%s)@test.local}"
+# NB: avoid .local / other special-use TLDs — EmailStr (email-validator) rejects them.
+EMAIL="${EMAIL:-smoke+$(date +%s)@example.com}"
 PASSWORD="${PASSWORD:-supersecret123}"
 DATA_HOST="${DATA_HOST:-localhost}"
 DATA_PORT="${DATA_PORT:-5432}"

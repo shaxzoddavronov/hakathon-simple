@@ -21,6 +21,10 @@ pydantic-settings
 # Auth / crypto
 python-jose[cryptography]
 passlib[bcrypt]
+# passlib 1.7.4's bcrypt handler is incompatible with bcrypt >=4.1: its internal
+# wrap-bug probe trips bcrypt's new 72-byte ValueError, which 500s every
+# register/login. Cap until passlib ships a release supporting modern bcrypt.
+bcrypt<4.1
 cryptography
 
 # Background jobs

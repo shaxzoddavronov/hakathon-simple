@@ -18,8 +18,13 @@ def _load_keys() -> None:
     raw = config.settings.QM_MASTER_KEY
     if not raw or raw == _PLACEHOLDER:
         raise RuntimeError("QM_MASTER_KEY env var is not set")
+    # The documented format (.env.example) is url-safe base64, often with the
+    # '=' padding stripped. urlsafe_b64decode also accepts standard base64
+    # (it only remaps '-_', leaving '+/' intact), so either generator works.
+    s = raw.strip()
+    s += "=" * (-len(s) % 4)
     try:
-        key = base64.b64decode(raw, validate=True)
+        key = base64.urlsafe_b64decode(s)
     except (ValueError, base64.binascii.Error) as e:
         raise RuntimeError(f"QM_MASTER_KEY must be valid base64: {e}") from e
     if len(key) != 32:
@@ -54,4 +59,5 @@ def decrypt(
 
 
 def generate_master_key() -> str:
-    return base64.b64encode(os.urandom(32)).decode("ascii")
+    # Url-safe to match the documented format in .env.example.
+    return base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
