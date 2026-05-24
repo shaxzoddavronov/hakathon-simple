@@ -12,10 +12,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import get_graph
-from app.agents.llm import get_llm
+from app.agents.llm import LLMClient, get_llm
 from app.api.deps import get_current_user
 from app.db.models import ChatSession, Message, QueryHistory, User, Workspace
 from app.db.session import get_db
+from app.services.user_settings import get_llm_settings
 from app.services.workspace_resolver import (
     Ambiguous,
     Conflict,
@@ -80,13 +81,16 @@ async def _ensure_session(
     return cs
 
 
-async def _ensure_llm_ready() -> None:
-    """Fail fast with 503 if the local model server is unreachable.
+async def _ensure_llm_ready(cfg: dict[str, str]) -> None:
+    """Fail fast with 503 if the configured model server is unreachable.
 
-    Transparent to tests: a stub LLM without an ``is_ready`` method is
-    assumed ready, so unit/integration tests don't need a live vLLM.
+    Probes the user's effective endpoint/key. Transparent to tests: a stub
+    LLM (not an LLMClient) without ``is_ready`` is assumed ready, so
+    unit/integration tests don't need a live vLLM.
     """
     client = get_llm()
+    if isinstance(client, LLMClient):
+        client = LLMClient(endpoint=cfg["endpoint"], api_key=cfg["api_key"])
     checker = getattr(client, "is_ready", None)
     if checker is None:
         return
@@ -107,7 +111,8 @@ async def post_chat(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    await _ensure_llm_ready()
+    llm_cfg = await get_llm_settings(session, current_user.id)
+    await _ensure_llm_ready(llm_cfg)
     workspace_id = await _resolve_or_workspace_id(session, current_user, payload)
     chat_session = await _ensure_session(
         session, current_user, payload.session_id, workspace_id
@@ -131,6 +136,9 @@ async def post_chat(
             "active_workspace_id": payload.active_workspace_id,
             "resolved_workspace_id": workspace_id,
             "force_dashboard": payload.force_dashboard,
+            "llm_endpoint": llm_cfg["endpoint"],
+            "llm_api_key": llm_cfg["api_key"],
+            "llm_model": llm_cfg["model_chat"],
         }
 
         yield _sse(

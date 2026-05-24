@@ -21,6 +21,11 @@ class GraphState(TypedDict, total=False):
     active_workspace_id: UUID | None  # dropdown selection
     force_dashboard: bool  # Dashboard-Diagram mode — force the dashboard intent
 
+    # Per-request LLM config (the user's editable Settings; falls back to env).
+    llm_endpoint: str | None
+    llm_api_key: str | None
+    llm_model: str | None  # chat model
+
     # Coordinator outputs
     resolved_workspace_id: UUID | None
     intent: str  # chitchat | metadata | data_query | dashboard | clarify

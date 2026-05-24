@@ -46,7 +46,12 @@ class Settings(BaseSettings):
 
     # --- Local LLM (vLLM, OpenAI-compatible) ------------------------------------
     VLLM_ENDPOINT: str = Field(default="http://localhost:8000/v1")
-    VLLM_MODEL: str = Field(default="Qwen/Qwen2.5-0.5B-Instruct")
+    # Chat model — the interactive agent (coordinator/planner/chart/answer/
+    # dashboard). Fast model by default.
+    VLLM_MODEL: str = Field(default="local-qwen3.6-35b-a3b-fast")
+    # Learning model — the heavier model used for database learning (the LLM
+    # schema-understanding pass run on connect + re-profile).
+    VLLM_MODEL_PROFILE: str = Field(default="local-qwen3.6-35b-a3b")
     # API key for the model endpoint. A local vLLM ignores it; a shared/admin
     # endpoint authenticates with it. Empty -> sent as "not-needed" for local dev.
     VLLM_API_KEY: str = Field(default="")

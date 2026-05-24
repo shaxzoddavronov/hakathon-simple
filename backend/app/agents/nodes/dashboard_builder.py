@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.agents.llm import get_llm
+from app.agents.llm import agent_llm
 from app.agents.nodes.chart_designer import ChartChoice, _build_spec
 from app.agents.nodes.query_planner import _schema_brief
 from app.agents.state import GraphState
@@ -42,7 +42,7 @@ async def run(state: GraphState) -> GraphState:
     if workspace_id is None or bundle is None:
         return {"error_message": "dashboard needs a resolved workspace and schema"}
 
-    llm = get_llm()
+    llm = agent_llm(state)
     keep = state.get("pruned_table_qnames")
     try:
         plan = await llm.structured(

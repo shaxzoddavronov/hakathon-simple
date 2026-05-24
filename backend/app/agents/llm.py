@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, TypeVar
 
@@ -10,6 +11,24 @@ from pydantic import BaseModel
 from app.config import settings
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _extract_json(text: str) -> str:
+    """Best-effort: pull the JSON object/array out of a model response.
+
+    Guided decoding usually yields clean JSON, but reasoning models may
+    prepend a <think>…</think> block or prose. Strip that and slice to the
+    outermost braces so model_validate_json succeeds.
+    """
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    if text[:1] in "{[":
+        return text
+    starts = [i for i in (text.find("{"), text.find("[")) if i != -1]
+    if not starts:
+        return text
+    start = min(starts)
+    end = max(text.rfind("}"), text.rfind("]"))
+    return text[start : end + 1] if end > start else text
 
 
 class LLMClient:
@@ -86,18 +105,32 @@ class LLMClient:
             max_tokens=max_tokens,
         )
         text = completion.choices[0].message.content or ""
-        return response_model.model_validate_json(text)
+        return response_model.model_validate_json(_extract_json(text))
 
 
 _default_client: LLMClient | None = None
 
 
-def get_llm() -> LLMClient:
-    """Return a process-wide LLMClient — created lazily."""
-    global _default_client
-    if _default_client is None:
-        _default_client = LLMClient()
-    return _default_client
+def get_llm(model: str | None = None) -> LLMClient:
+    """Build a client from env config (optionally overriding the model).
+    Honors a test stub when one is installed."""
+    if _default_client is not None:
+        return _default_client
+    return LLMClient(model=model)
+
+
+def agent_llm(state: dict | None = None) -> LLMClient:
+    """Chat client built from the per-request LLM settings carried in graph
+    state (endpoint / api_key / model), so each user's editable Settings
+    take effect. Falls back to env defaults, and to the test stub in tests."""
+    if _default_client is not None:
+        return _default_client
+    s = state or {}
+    return LLMClient(
+        endpoint=s.get("llm_endpoint"),
+        model=s.get("llm_model"),
+        api_key=s.get("llm_api_key"),
+    )
 
 
 def set_llm_for_testing(client: LLMClient | None) -> None:
@@ -106,4 +139,4 @@ def set_llm_for_testing(client: LLMClient | None) -> None:
     _default_client = client
 
 
-__all__ = ["LLMClient", "get_llm", "set_llm_for_testing"]
+__all__ = ["LLMClient", "get_llm", "agent_llm", "set_llm_for_testing"]

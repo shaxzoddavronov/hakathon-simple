@@ -18,7 +18,8 @@ x-backend-env: &backend-env
   QM_MASTER_KEY: ${QM_MASTER_KEY:?set QM_MASTER_KEY (base64/url-safe 32-byte key)}
   JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
   VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://host.docker.internal:8000/v1}
-  VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
+  VLLM_MODEL: ${VLLM_MODEL:-local-qwen3.6-35b-a3b-fast}
+  VLLM_MODEL_PROFILE: ${VLLM_MODEL_PROFILE:-local-qwen3.6-35b-a3b}
   VLLM_API_KEY: ${VLLM_API_KEY:-}
   # Browser origin allowed to call the API (the frontend's URL).
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}

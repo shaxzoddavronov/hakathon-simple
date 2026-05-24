@@ -74,3 +74,25 @@ class DashboardPlan(BaseModel):
     panels: list[DashboardPanel] = Field(
         description="2-6 complementary panels that together answer the question."
     )
+
+
+class TableNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    table: str
+    note: str = Field(description="One concise sentence: what this table stores.")
+
+
+class SchemaInsight(BaseModel):
+    """Output of the database-learning pass (the standard model reads the
+    introspected schema and writes a semantic understanding of it)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(
+        description="2-3 sentences: what this database models, overall."
+    )
+    tables: list[TableNote] = Field(
+        default_factory=list,
+        description="A short note per table — purpose and key relationships.",
+    )

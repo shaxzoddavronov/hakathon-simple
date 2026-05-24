@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agents.llm import get_llm
+from app.agents.llm import agent_llm
 from app.agents.state import GraphState
 from app.engines.base import SchemaBundle
 from app.schemas.llm_io import SqlPlan
@@ -66,7 +66,7 @@ async def run(state: GraphState) -> GraphState:
         + "Return a SqlPlan."
     )
 
-    llm = get_llm()
+    llm = agent_llm(state)
     plan = await llm.structured(
         [
             {"role": "system", "content": _SYSTEM},

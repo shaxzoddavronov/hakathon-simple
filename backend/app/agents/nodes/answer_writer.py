@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agents.llm import get_llm
+from app.agents.llm import agent_llm
 from app.agents.state import GraphState
 from app.engines.base import ResultSet
 from app.schemas.llm_io import AnswerDraft
@@ -26,7 +26,7 @@ async def run(state: GraphState) -> GraphState:
     rs = state.get("result")
     if rs is None and state.get("intent") in {"chitchat", "metadata"}:
         # No data — produce a short conversational answer.
-        llm = get_llm()
+        llm = agent_llm(state)
         draft = await llm.structured(
             [
                 {
@@ -45,7 +45,7 @@ async def run(state: GraphState) -> GraphState:
     if rs is None:
         return {"answer": AnswerDraft(headline="No result.", body_md="The query returned no rows.")}
 
-    llm = get_llm()
+    llm = agent_llm(state)
     prompt = (
         f"Question: {state.get('user_message','')}\n\n"
         f"Result shape:\n{_result_shape(rs)}\n\n"

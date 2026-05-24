@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agents.llm import get_llm
+from app.agents.llm import agent_llm
 from app.agents.state import GraphState
 from app.schemas.llm_io import IntentDecision
 
@@ -26,7 +26,7 @@ async def run(state: GraphState) -> GraphState:
         # so skip LLM classification and route straight to the dashboard path.
         out: GraphState = {"intent": "dashboard", "workspace_hint": None}
     else:
-        llm = get_llm()
+        llm = agent_llm(state)
         decision = await llm.structured(
             [
                 {"role": "system", "content": _SYSTEM},

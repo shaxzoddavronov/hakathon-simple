@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agents.llm import get_llm
+from app.agents.llm import agent_llm
 from app.agents.state import GraphState
 from app.engines.base import ResultSet
 from app.schemas.ui_spec import (
@@ -155,7 +155,7 @@ async def run(state: GraphState) -> GraphState:
     if rs.row_count == 0:
         return {"chart": TextOnly(type="text_only", body_md="No rows returned.")}
 
-    llm = get_llm()
+    llm = agent_llm(state)
     try:
         choice = await llm.structured(
             [

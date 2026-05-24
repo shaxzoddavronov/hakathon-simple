@@ -14,8 +14,11 @@ from app.config import settings
 from app.db.models import ProfileJob, SchemaBundle, Workspace, WorkspaceCredentials
 from app.engines import register_all as register_engines
 from app.engines.registry import get_engine
+from app.agents.llm import LLMClient
+from app.schemas.llm_io import SchemaInsight
 from app.services import crypto
 from app.services.schema_profiler import profile
+from app.services.user_settings import get_llm_settings
 from app.workers.celery_app import celery_app
 
 # Register concrete engine adapters on worker import so the task body can
@@ -49,9 +52,11 @@ async def _run_async(workspace_id: UUID, profile_job_id: UUID) -> dict[str, obje
                 qe = get_engine(workspace)
                 bundle = await profile(qe)
                 await qe.aclose()
-                await _persist_bundle(session, workspace_id, bundle)
+                # Database-learning pass (best-effort) using the standard model.
+                learning = await _learn_schema(session, workspace, bundle)
+                await _persist_bundle(session, workspace_id, bundle, learning)
                 await _mark_succeeded(session, profile_job_id, workspace_id)
-                return {"ok": True, "tables": len(bundle.tables)}
+                return {"ok": True, "tables": len(bundle.tables), "learned": learning is not None}
             except Exception as e:
                 log.exception("profile job failed for workspace %s", workspace_id)
                 await _mark_failed(session, profile_job_id, workspace_id, str(e))
@@ -92,8 +97,60 @@ async def _load_credentials(session: AsyncSession, workspace_id: UUID) -> dict[s
     return {"password": raw.decode("utf-8", errors="replace")}
 
 
-async def _persist_bundle(session: AsyncSession, workspace_id: UUID, bundle) -> None:
+def _schema_text(bundle) -> str:
+    lines = []
+    for t in bundle.tables:
+        cols = ", ".join(f"{c.name} {c.data_type}" for c in t.columns)
+        lines.append(f"{t.schema}.{t.name}({cols})")
+    return "\n".join(lines)
+
+
+async def _learn_schema(session: AsyncSession, workspace, bundle) -> dict | None:
+    """Database-learning pass: the standard model reads the introspected
+    schema and writes a semantic understanding. Best-effort — a failure
+    (model down, unreachable endpoint) must not fail profiling itself."""
+    if not bundle.tables:
+        return None
+    try:
+        cfg = await get_llm_settings(session, workspace.owner_id)
+        client = LLMClient(
+            endpoint=cfg["endpoint"],
+            model=cfg["model_profile"],
+            api_key=cfg["api_key"],
+        )
+        insight = await client.structured(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a data analyst learning a newly connected database. "
+                        "Read the schema and write a concise semantic understanding."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Schema:\n{_schema_text(bundle)}\n\nReturn a SchemaInsight.",
+                },
+            ],
+            SchemaInsight,
+            max_tokens=2000,
+        )
+        return insight.model_dump(mode="json")
+    except Exception:
+        log.warning(
+            "schema-learning step failed for workspace %s",
+            getattr(workspace, "id", "?"),
+            exc_info=True,
+        )
+        return None
+
+
+async def _persist_bundle(
+    session: AsyncSession, workspace_id: UUID, bundle, learning: dict | None = None
+) -> None:
     payload = bundle.model_dump(mode="json")
+    if learning is not None:
+        payload["learning"] = learning
     blob = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     digest = hashlib.sha256(blob).hexdigest()
 

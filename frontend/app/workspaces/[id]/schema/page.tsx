@@ -29,10 +29,15 @@ type Table = {
   foreign_keys: { from_columns: string[]; to_table: string; to_columns: string[] }[];
   row_count_estimate?: number | null;
 };
+type Learning = {
+  summary: string;
+  tables: { table: string; note: string }[];
+};
 type Bundle = {
   dialect: string;
   tables: Table[];
   samples: Record<string, Record<string, Sample>>;
+  learning?: Learning | null;
 };
 type Resp = {
   workspace_id: string;
@@ -208,10 +213,15 @@ export default function SchemaPage() {
               <GlassPanel className="qm-gradient-border p-5">
                 <div className="flex items-center gap-2 font-mono text-label-caps uppercase text-primary-container mb-2">
                   <SparkIcon width={16} height={16} /> Semantic Insight
+                  {data.bundle.learning ? (
+                    <span className="text-[10px] text-tertiary border border-tertiary/40 rounded px-1.5 py-0.5">
+                      learned
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-4">
                   <p className="text-on-surface-variant text-sm flex-1">
-                    {insightFor(selectedTable)}
+                    {insightText(data.bundle, selectedTable)}
                   </p>
                   <Waveform />
                 </div>
@@ -226,6 +236,19 @@ export default function SchemaPage() {
       </div>
     </Shell>
   );
+}
+
+function insightText(bundle: Bundle, t: Table): string {
+  const learn = bundle.learning;
+  if (learn) {
+    const qn = `${t.schema}.${t.name}`;
+    const note = learn.tables?.find(
+      (x) => x.table === t.name || x.table === qn || x.table.endsWith(`.${t.name}`),
+    )?.note;
+    if (note) return note;
+    if (learn.summary) return learn.summary;
+  }
+  return insightFor(t);
 }
 
 function insightFor(t: Table): string {
