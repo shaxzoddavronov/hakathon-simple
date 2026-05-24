@@ -27,6 +27,17 @@ function authHeader(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+/**
+ * On a 401 (expired/invalid session), drop the stale token and send the user
+ * to /login to re-authenticate. Guarded so we never loop on the login page.
+ */
+function handleUnauthorized(): void {
+  clearToken();
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
 export async function api<T>(
   path: string,
   init: RequestInit = {},
@@ -40,6 +51,7 @@ export async function api<T>(
     },
   });
   if (!r.ok) {
+    if (r.status === 401) handleUnauthorized();
     const detail = await r.text();
     throw new Error(`${r.status} ${r.statusText}: ${detail}`);
   }
@@ -96,6 +108,7 @@ export async function streamChat(
     body: JSON.stringify(payload),
   });
   if (!r.ok || !r.body) {
+    if (r.status === 401) handleUnauthorized();
     throw new Error(`Chat stream failed: ${r.status}`);
   }
   const reader = r.body.getReader();
