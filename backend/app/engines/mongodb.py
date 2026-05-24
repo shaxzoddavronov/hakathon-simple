@@ -165,6 +165,9 @@ class MongoEngine:
         )
 
     async def probe_write_access(self) -> bool:
+        # connectionStatus doubles as the reachability check — if it raises
+        # (unreachable), it propagates so the probe reports "Could not connect"
+        # instead of a false "Connected".
         client = self._client()
         try:
             status = await client[self._db_name].command({"connectionStatus": 1})
@@ -174,8 +177,6 @@ class MongoEngine:
                 return True
             writable = {"readWrite", "dbOwner", "dbAdmin", "root", "__system", "readWriteAnyDatabase"}
             return any(r.get("role") in writable for r in roles)
-        except Exception:
-            return False
         finally:
             client.close()
 

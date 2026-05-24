@@ -44,8 +44,21 @@ class ElasticsearchEngine:
             raise ValueError(
                 f"Elasticsearch workspace missing connection keys: {sorted(missing)}"
             )
+        # Build the base URL robustly: the user may paste a full URL
+        # ("http://host:9200"), a host:port ("host:9200"), or just a host
+        # plus a separate port field. Avoid producing "host:9200:9200".
         scheme = "https" if meta.get("ssl") else "http"
-        self._base = f"{scheme}://{meta['host']}:{int(meta.get('port', 9200))}"
+        host = str(meta["host"]).strip().rstrip("/")
+        if "://" in host:
+            self._base = host
+        elif ":" in host and not host.startswith("["):  # host already has :port
+            self._base = f"{scheme}://{host}"
+        else:
+            try:
+                port = int(meta.get("port", 9200))
+            except (TypeError, ValueError):
+                port = 9200
+            self._base = f"{scheme}://{host}:{port}"
         user = meta.get("user")
         self._auth = (user, meta.get("password", "")) if user else None
 
@@ -143,8 +156,13 @@ class ElasticsearchEngine:
         return validate_readonly(sql, dialect="elasticsearch")
 
     async def probe_write_access(self) -> bool:
-        try:
-            async with self._client(6.0) as client:
+        async with self._client(6.0) as client:
+            # Ping first — a bad URL / unreachable cluster raises here and
+            # propagates so the probe reports "Could not connect" (not a
+            # false "Connected"). Only the privilege check is best-effort.
+            ping = await client.get("/")
+            ping.raise_for_status()
+            try:
                 r = await client.post(
                     "/_security/user/_has_privileges",
                     json={
@@ -155,9 +173,9 @@ class ElasticsearchEngine:
                 )
                 if r.status_code == 200:
                     return bool(r.json().get("has_all_requested"))
-        except Exception:
-            pass
-        return False
+            except Exception:
+                pass
+            return False
 
     async def execute(
         self, sql: str, *, row_cap: int = 1000, timeout_s: int = 10
