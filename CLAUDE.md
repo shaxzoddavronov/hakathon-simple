@@ -4,12 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This is a **greenfield repo**. The working tree contains only:
-- `PLAN.md` — the implementation spec (read this first; it is the source of truth)
-- `ui_images/DESIGN.md` + PNGs — the "Neural Dark" glassmorphism design tokens and reference screens
-- No `backend/`, `frontend/`, or `infra/` code yet. The prior Elasticsearch-flavored scaffold was deleted on purpose; do not restore it from `git log`.
+The app is **built and wired end to end** — `backend/` (FastAPI + LangGraph + Celery), `frontend/` (Next.js app router), and `infra/` (docker-compose + seed SQL) all exist. Two specs remain the source of truth and should stay in sync with the code:
+- `PLAN.md` — the implementation spec. Read it first for any non-trivial change; if you change an architecture invariant, update it.
+- `ui_images/DESIGN.md` + PNGs — the "Neural Dark" glassmorphism design tokens and reference screens.
 
-When the user asks for design or planning work, save the final plan back to `PLAN.md` — they execute the plan in a later session.
+The prior Elasticsearch-flavored scaffold was deleted on purpose; do not restore it from `git log`.
 
 ## Product in one paragraph
 
@@ -23,11 +22,11 @@ When the user asks for design or planning work, save the final plan back to `PLA
   1. Boundary — the connect form documents the read-only GRANT recipe and probes write access.
   2. Parse — `services/readonly_validator.py` uses `sqlglot.parse_one(sql, read=dialect)`, walks the AST, rejects any DML/DDL/`SET`/`COPY`/`GRANT`/multi-statement input and a denylist of system tables and dangerous functions (`pg_sleep`, `pg_read_file`, `dblink`, `load_file`, …). The malicious corpus in `tests/unit/test_readonly_validator.py` is the spec — it must reject every line.
   3. Runtime — Postgres executes inside `BEGIN; SET LOCAL transaction_read_only=on; SET LOCAL statement_timeout='10s'; … ROLLBACK;`. SQLite opens with `file:<path>?mode=ro` URI plus `PRAGMA query_only=ON`.
-- **Agent graph topology** (`backend/app/agents/graph.py`): `coordinator → schema_loader → query_planner ↔ query_validator → query_executor → {chart_designer, answer_writer} → finalizer`. Planner↔validator and planner↔executor each have **retry≤2**, then route to `error_responder`. `chart_designer` and `answer_writer` fan out in parallel via LangGraph reducer semantics — `chart` and `answer` are independent state slots merged in `finalizer`.
-- **LLM-driven nodes:** `coordinator`, `query_planner`, `chart_designer`, `answer_writer`. **Deterministic nodes:** `schema_loader`, `query_validator`, `query_executor`, `finalizer`, `error_responder`. Don't move a node between groups without a reason.
+- **Agent graph topology** (`backend/app/agents/graph.py`): `coordinator` routes by `intent` — `chitchat`→`answer_writer`, `clarify`→`finalizer`, and `metadata`/`data_query`/`dashboard`→`schema_loader`. From `schema_loader`: `metadata`→`answer_writer`, `dashboard`→`dashboard_builder`, else→`query_planner ↔ query_validator → query_executor → {chart_designer, answer_writer}`. Every branch terminates at `finalizer → END`. Planner↔validator and planner↔executor each have **retry≤2** (`MAX_PLANNER_ATTEMPTS`/`MAX_EXECUTOR_ATTEMPTS`), then route to `error_responder`. `chart_designer` and `answer_writer` fan out in parallel via LangGraph reducer semantics — `chart` and `answer` are independent state slots merged in `finalizer`.
+- **LLM-driven nodes:** `coordinator`, `query_planner`, `chart_designer`, `answer_writer`, `dashboard_builder`. **Deterministic nodes:** `schema_loader`, `query_validator`, `query_executor`, `finalizer`, `error_responder`. Don't move a node between groups without a reason. (`dashboard_builder` is LLM-driven — it emits a `DashboardPlan` — but it still runs each panel's SQL through `validate_readonly` and the engine before building the `Dashboard` spec.)
 - **Frontend/backend contract is `backend/app/schemas/ui_spec.py`.** `UISpec` is a discriminated union (`text_only | kpi | bar | line | pie | table | dashboard`). `frontend/components/RenderSpec.tsx` dispatches on `spec.type`. Any change to one side must update the other in the same PR.
 - **Chart designer never sees raw result rows.** It receives only the result *shape* (columns, dtypes, row_count, 5 sample rows). Same for `answer_writer`. This is for prompt size and to prevent the LLM from inventing numbers.
-- **LLM I/O contracts live in `backend/app/schemas/llm_io.py`** (`IntentDecision`, `SqlPlan`, `AnswerDraft`). Every vLLM call must pass `response_format={"type":"json_schema", "json_schema": {..., "schema": Model.model_json_schema(), "strict": True}}` — never parse free-text JSON from the model.
+- **LLM I/O contracts live in `backend/app/schemas/llm_io.py`** (`IntentDecision`, `SqlPlan`, `AnswerDraft`, plus `DashboardPlan`/`DashboardPanel` for the dashboard path). Every vLLM call must pass `response_format={"type":"json_schema", "json_schema": {..., "schema": Model.model_json_schema(), "strict": True}}` — never parse free-text JSON from the model.
 - **Planner prompt size is gated by `services/schema_pruner.py`** (BM25 top-K over `f"{table} {col}"`, K=8). Any table named in the user message is pinned. Drop sampled values before dropping table entries when over budget (~6K tokens).
 - **Workspace resolution** (`services/workspace_resolver.py`) merges three signals — dropdown selection, `@name`/`[name]` mentions, and bare-word matches against the user's workspace names. Anything that isn't a clean `Resolved` becomes `intent="clarify"` and a `text_only` UISpec with quick-reply chips. Don't bypass this — the coordinator depends on its outcomes.
 - **DB credentials are encrypted at rest with AES-GCM** via `services/crypto.py`, master key from env `QM_MASTER_KEY` (base64, 256-bit). `key_version` column is reserved for rotation; v1 hard-codes 1.
@@ -58,7 +57,7 @@ The scaffolding has landed. Real commands:
 - Tests: `pytest tests/` — single test: `pytest tests/unit/test_readonly_validator.py::test_malicious_rejected`
 - Unit only (no DB needed): `pytest tests/unit/`
 - The Postgres e2e (`tests/integration/test_e2e_postgres.py`) auto-skips unless a Postgres is reachable on `localhost:55432`; it also needs a `sales_demo` database seeded from `infra/seed/seed_sales.sql`.
-- Migrations: `alembic upgrade head` (creates `pgcrypto` + all 10 tables; needs `DATABASE_URL` set to the Postgres metadata DB).
+- Migrations: `alembic upgrade head` (creates `pgcrypto` + all 9 tables; needs `DATABASE_URL` set to the Postgres metadata DB).
 - API: `uvicorn app.main:app --port 8080` — **must be 8080**, since vLLM owns 8000 and the frontend hardcodes `localhost:8080` (override via `NEXT_PUBLIC_API_BASE_URL`).
 - Worker: `celery -A app.workers.celery_app worker -l info` — required for schema profiling. Must share the same `.env` as the API (same `QM_MASTER_KEY` + `DATABASE_URL`).
 - vLLM probe: `python scripts/check_vllm.py` — run before the stack to confirm guided-JSON works against your vLLM build.
