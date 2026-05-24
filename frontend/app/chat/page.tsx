@@ -14,6 +14,7 @@ import {
   TrendIcon,
 } from "@/components/icons";
 import { api, getToken, streamChat } from "@/lib/api";
+import { uid } from "@/lib/id";
 import type { ChatMessage, Dashboard, UISpec } from "@/lib/types";
 
 type WorkspaceOut = { id: string; name: string; dialect: string; status: string };
@@ -88,7 +89,7 @@ export default function ChatPage() {
     setInput("");
     setMessages((m) => [
       ...m,
-      { id: crypto.randomUUID(), role: "user", content: userText },
+      { id: uid(), role: "user", content: userText },
     ]);
     setStreaming(true);
     setActiveNode(null);
@@ -96,7 +97,7 @@ export default function ChatPage() {
 
     let finalSpec: UISpec | null = null;
     let finalSql: string | null = null;
-    let assistantId = crypto.randomUUID();
+    let assistantId = uid();
 
     try {
       await streamChat(
