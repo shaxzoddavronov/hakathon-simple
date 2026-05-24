@@ -18,7 +18,7 @@ class IntentDecision(BaseModel):
 class SqlPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    dialect: Literal["postgres", "sqlite", "clickhouse"]
+    dialect: Literal["postgres", "sqlite", "clickhouse", "oracle"]
     sql: str = Field(
         description="A single read-only SELECT. Validator will reject DML/DDL."
     )

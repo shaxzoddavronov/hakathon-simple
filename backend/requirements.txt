@@ -15,6 +15,7 @@ aiosqlite
 alembic
 # Data-source engine drivers (user-connected DBs)
 clickhouse-connect[async]
+oracledb
 
 # Config / validation
 pydantic>=2

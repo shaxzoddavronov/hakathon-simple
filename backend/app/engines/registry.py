@@ -13,6 +13,7 @@ QUERY_KIND: dict[Dialect, QueryKind] = {
     "postgres": "sql",
     "sqlite": "sql",
     "clickhouse": "sql",
+    "oracle": "sql",
 }
 
 

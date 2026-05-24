@@ -8,7 +8,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { DatabaseIcon, TableIcon } from "@/components/icons";
 import { api, getToken } from "@/lib/api";
 
-type Dialect = "postgres" | "sqlite" | "clickhouse";
+type Dialect = "postgres" | "sqlite" | "clickhouse" | "oracle";
 
 const GRANT_RECIPE: Record<Dialect, string> = {
   postgres: `-- Run as a superuser in the database you want to expose
@@ -25,11 +25,17 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 CREATE USER querymind_ro IDENTIFIED BY 'replace-me' SETTINGS readonly = 2;
 GRANT SELECT ON your_db.* TO querymind_ro;
 -- QueryMind also enforces readonly=2 on every query at runtime.`,
+  oracle: `-- Create a read-only Oracle user (run as a DBA)
+CREATE USER querymind_ro IDENTIFIED BY "replace-me";
+GRANT CREATE SESSION TO querymind_ro;
+GRANT SELECT ON your_schema.your_table TO querymind_ro;  -- per table
+-- QueryMind also runs every query as SET TRANSACTION READ ONLY.`,
 };
 
 const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
   { id: "postgres", label: "PostgreSQL", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "clickhouse", label: "ClickHouse", icon: <DatabaseIcon width={28} height={28} /> },
+  { id: "oracle", label: "Oracle", icon: <DatabaseIcon width={28} height={28} /> },
   { id: "sqlite", label: "SQLite", icon: <TableIcon width={28} height={28} /> },
 ];
 
@@ -37,6 +43,7 @@ const ARCHS: { id: Dialect; label: string; icon: React.ReactNode }[] = [
 const DEFAULT_PORT: Record<string, string> = {
   postgres: "5432",
   clickhouse: "8123",
+  oracle: "1521",
 };
 
 export default function NewWorkspacePage() {
@@ -148,7 +155,7 @@ export default function NewWorkspacePage() {
           {/* Architecture selector */}
           <div>
             <p className="text-on-surface mb-3">Select primary data architecture</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {ARCHS.map((a) => {
                 const active = dialect === a.id;
                 return (
