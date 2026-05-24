@@ -103,9 +103,19 @@ class LLMClient:
             },
             temperature=temperature,
             max_tokens=max_tokens,
+            # Reasoning ("thinking") models would otherwise spend the token
+            # budget on a <think> block and sometimes return no JSON. We want
+            # the structured answer, not reasoning. Ignored by non-thinking
+            # templates, so it's safe across models.
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         text = completion.choices[0].message.content or ""
-        return response_model.model_validate_json(_extract_json(text))
+        payload = _extract_json(text)
+        if not payload.strip():
+            raise ValueError(
+                f"LLM returned an empty response for {response_model.__name__}"
+            )
+        return response_model.model_validate_json(payload)
 
 
 _default_client: LLMClient | None = None
